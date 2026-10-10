@@ -22,6 +22,7 @@ TIMEOUT_S = 10
 def _worker_loop(conn) -> None:
     from server.analyzer import analyze
 
+    conn.send("ready")  # importer PyTorch peut prendre plusieurs secondes : hors du délai
     while True:
         code, pixels = conn.recv()
         try:
@@ -42,11 +43,15 @@ class Worker:
         self._conn, child = ctx.Pipe()
         self._proc = ctx.Process(target=_worker_loop, args=(child,), daemon=True)
         self._proc.start()
+        self._ready = False
 
     def run(self, code: str, pixels) -> dict:
         with self._lock:
             if not self._proc.is_alive():
                 self._start()
+            if not self._ready:
+                self._conn.recv()
+                self._ready = True
             self._conn.send((code, pixels))
             if self._conn.poll(TIMEOUT_S):
                 return self._conn.recv()
