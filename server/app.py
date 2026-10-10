@@ -20,13 +20,21 @@ TIMEOUT_S = 10
 
 
 def _worker_loop(conn) -> None:
-    from server.analyzer import analyze
+    from server import trainer
+    from server.analyzer import analyze, train
 
     conn.send("ready")  # importer PyTorch peut prendre plusieurs secondes : hors du délai
+    trainer.preload()
     while True:
-        code, pixels, text = conn.recv()
+        op, code, pixels, text = conn.recv()
         try:
-            conn.send(analyze(code, pixels, text))
+            if op == "train":
+                conn.send(train(code))
+            elif op == "reset":
+                trainer.reset(code)
+                conn.send({"ok": True})
+            else:
+                conn.send(analyze(code, pixels, text))
         except Exception as exc:  # noqa: BLE001
             conn.send({"ok": False, "error": str(exc), "line": None})
 
@@ -45,14 +53,14 @@ class Worker:
         self._proc.start()
         self._ready = False
 
-    def run(self, code: str, pixels, text=None) -> dict:
+    def run(self, code: str, pixels, text=None, op: str = "analyze") -> dict:
         with self._lock:
             if not self._proc.is_alive():
                 self._start()
             if not self._ready:
                 self._conn.recv()
                 self._ready = True
-            self._conn.send((code, pixels, text))
+            self._conn.send((op, code, pixels, text))
             if self._conn.poll(TIMEOUT_S):
                 return self._conn.recv()
             self._proc.kill()
@@ -83,6 +91,21 @@ app = FastAPI(title="neuro-lens", lifespan=lifespan)
 @app.post("/api/analyze")
 def analyze_endpoint(req: AnalyzeRequest) -> dict:
     return worker.run(req.code, req.pixels, req.text)
+
+
+class CodeRequest(BaseModel):
+    code: str
+
+
+@app.post("/api/train")
+def train_endpoint(req: CodeRequest) -> dict:
+    """Une époque d'entraînement ; les analyses suivantes de ce code montrent le réseau entraîné."""
+    return worker.run(req.code, None, op="train")
+
+
+@app.post("/api/reset")
+def reset_endpoint(req: CodeRequest) -> dict:
+    return worker.run(req.code, None, op="reset")
 
 
 @app.get("/")

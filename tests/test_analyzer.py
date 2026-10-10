@@ -246,3 +246,21 @@ def test_agent_graph_and_run():
     loop = analyze(AGENT.replace("< 2", "< 999"))
     assert "tourne en rond" in loop["stopped"] and len(loop["steps"]) > 10
     assert "state" in analyze(AGENT.replace("state = {", "start = {"))["hint"]
+
+
+def test_training_improves_and_is_reused_by_analysis():
+    from server import trainer
+    from server.analyzer import train
+
+    code = CNN.replace("model =", "torch.manual_seed(0)\nmodel =")
+    first = train(code)
+    assert first["ok"] and first["training"]["epochs"][0]["seen"] == first["n_train"]
+    for _ in range(2):
+        last = train(code)
+    accs = [e["test_acc"] for e in last["training"]["epochs"]]
+    assert len(accs) == 3 and accs[-1] > 0.5 and accs[-1] > accs[0]
+    res = analyze(code)
+    assert res["trainable"] and len(res["training"]["epochs"]) == 3
+    trainer.reset(code)
+    assert analyze(code)["training"] is None
+    assert not train(TRANSFORMER)["ok"]  # texte : pas d'entraînement sur les chiffres

@@ -30,6 +30,7 @@ Ce que la page montre dépend de ce que le code définit :
   - une grille par tête d'attention : qui regarde qui ;
   - choix du routeur dans un mélange d'experts (MoE).
 - **Prédiction** finale sous forme de barres.
+- **Entraînement en direct** : le bouton « Entraîner » fait apprendre le réseau sur 1 437 vrais chiffres manuscrits (load_digits de scikit-learn, rien à télécharger). Une courbe montre l'erreur baisser, le taux de réussite sur des chiffres jamais vus s'affiche après chaque époque, et toutes les vues passent aux poids appris.
 
 Les réseaux ne sont pas entraînés : les poids sont aléatoires, mais les formes, les filtres et le trajet des données sont réels.
 
@@ -76,7 +77,6 @@ Le serveur exécute le code tapé dans l'éditeur : il est fait pour tourner sur
 
 ## Pistes
 
-- Bouton « Entraîner » sur MNIST, avec la courbe de loss et les filtres qui évoluent en direct.
 - Afficher aussi les opérations fonctionnelles (`F.relu`) appelées dans `forward`.
 - Un vrai tokenizer et des embeddings pré-entraînés, pour que les mots proches se rapprochent.
 - Brancher un vrai modèle de langage dans l'exemple d'agent.

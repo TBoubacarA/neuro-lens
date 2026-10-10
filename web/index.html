@@ -40,6 +40,20 @@
           </div>
         </div>
       </div>
+      <div class="card train-card" id="train-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Entraînement</span>
+          <span class="shape" id="train-shape">poids aléatoires</span>
+        </div>
+        <p class="hint">Fais apprendre le réseau sur 1 437 vrais chiffres manuscrits. Après chaque époque, toutes les vues se mettent à jour : regarde les filtres se former et la prédiction devenir juste.</p>
+        <div class="train-actions">
+          <button id="train-1">Entraîner 1 époque</button>
+          <button id="train-5">Entraîner 5 époques</button>
+          <button id="train-reset" class="small">Réinitialiser</button>
+          <span id="train-status" class="meta"></span>
+        </div>
+        <div id="train-chart"></div>
+      </div>
       <div class="card graph-card" id="graph-card" hidden>
         <div class="card-head">
           <span class="tag tag-input">Vue réseau</span>
@@ -68,6 +82,7 @@
   <script src="/static/blocks.js"></script>
   <script src="/static/ml.js"></script>
   <script src="/static/agents.js"></script>
+  <script src="/static/train.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

@@ -267,6 +267,21 @@ def _other_kinds(code: str, namespace: dict) -> dict:
     return result
 
 
+def train(code: str) -> dict:
+    """Une époque d'entraînement sur de vrais chiffres manuscrits (voir server/trainer.py)."""
+    from server import trainer
+
+    namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
+    try:
+        exec(compile(code, FILENAME, "exec"), namespace)
+        model = namespace.get("model")
+        if not isinstance(model, nn.Module):
+            return {"ok": False, "error": "L'entraînement en direct marche pour les réseaux PyTorch.", "line": None}
+        return trainer.train(code, model)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": _explain(exc), "line": _error_line(exc)}
+
+
 def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None = None) -> dict:
     """Point d'entrée : code Python -> description des couches et de leurs sorties."""
     namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
@@ -282,6 +297,12 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
     n_params = sum(p.numel() for p in model.parameters())
     if n_params > MAX_PARAMS:
         return {"ok": False, "error": f"Modèle trop gros pour l'aperçu ({n_params:,} paramètres).", "line": None}
+    from server import trainer
+
+    try:
+        training = trainer.apply(code, model)  # poids appris avec le bouton « Entraîner », s'il y en a
+    except RuntimeError:
+        training = None
 
     leaves = _leaves(model)
     tokens = None
@@ -381,6 +402,8 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
         "layers": layers,
         "n_params": n_params,
         "output_from": _sources([out], producers, x),
+        "training": training,
+        "trainable": tokens is None and trainer.can_train(model) is None,
     }
     if isinstance(out, torch.Tensor) and out.dim() == 2 and out.shape[1] <= 20:
         probs = torch.softmax(out[0], dim=0)

@@ -208,7 +208,7 @@ function renderOther(res) {
   lastLayers = [];
   lastShape = "";
   tokens = null;
-  ["input-card", "graph-card", "blocks-card"].forEach((id) => { $(id).hidden = true; });
+  ["input-card", "graph-card", "blocks-card", "train-card"].forEach((id) => { $(id).hidden = true; });
   $("prediction").innerHTML = "";
   if (res.kind === "ml") {
     setStatus(`${res.estimator} · ${res.n_samples} exemples`, "ok");
@@ -241,7 +241,8 @@ function render(res) {
     lastResult = res;
     renderLayers(res.layers, null, build);
     renderNetwork(res, build);
-    renderPrediction(res.prediction);
+    renderPrediction(res.prediction, res.training);
+    renderTraining(res);
   } else {
     err.hidden = false;
     err.textContent = (res.line ? `Ligne ${res.line} : ` : "") + res.error;
@@ -513,7 +514,7 @@ function heat(v) {
   return [0, 1, 2].map((k) => Math.round(a[k] + (b[k] - a[k]) * f)).concat(255);
 }
 
-function renderPrediction(pred) {
+function renderPrediction(pred, training) {
   const root = $("prediction");
   if (!pred) { root.innerHTML = ""; return; }
   const bars = pred.probs.map((p, i) => `
@@ -523,8 +524,9 @@ function renderPrediction(pred) {
   root.innerHTML = `
     <div class="card" data-family="dense">
       <div class="card-head"><span class="tag">Prédiction</span><span class="shape">classe ${pred.top}</span></div>
-      <p class="explain">Probabilité de chaque classe (softmax des scores). Le modèle n'est pas entraîné :
-        ses poids sont aléatoires, donc la réponse l'est aussi pour l'instant.</p>
+      <p class="explain">Probabilité de chaque classe (softmax des scores). ${training
+        ? `Le modèle a appris pendant ${training.epochs.length} époque${training.epochs.length > 1 ? "s" : ""} : la réponse est maintenant la sienne.`
+        : "Le modèle n'est pas entraîné : ses poids sont aléatoires, donc la réponse l'est aussi. Clique sur « Entraîner »."}</p>
       <div class="probs">${bars}</div>
     </div>`;
 }
