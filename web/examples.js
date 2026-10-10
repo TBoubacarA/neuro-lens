@@ -96,4 +96,73 @@ class MiniTransformer(nn.Module):
 
 model = MiniTransformer()
 `,
+
+  "Mini-ViT (image en patchs)": `import torch
+import torch.nn as nn
+
+# Vision Transformer : l'image est découpée en patchs, traités comme les mots d'une phrase.
+
+
+class MiniViT(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.patches = nn.Conv2d(1, 32, kernel_size=7, stride=7)   # 28x28 -> 4x4 = 16 patchs
+        self.cls = nn.Parameter(torch.zeros(1, 1, 32))             # token « classe » ajouté devant
+        self.position = nn.Parameter(torch.randn(1, 17, 32) * 0.1) # où se trouve chaque patch
+        self.block = nn.TransformerEncoderLayer(
+            d_model=32, nhead=4, dim_feedforward=64, batch_first=True)
+        self.head = nn.Linear(32, 10)
+
+    def forward(self, image):
+        x = self.patches(image).flatten(2).transpose(1, 2)         # 16 tokens de 32 nombres
+        x = torch.cat([self.cls, x], dim=1) + self.position        # 17 tokens : le n° 0 est « classe »
+        x = self.block(x)
+        return self.head(x[:, 0])                                  # on lit la réponse sur le token 0
+
+
+model = MiniViT()
+`,
+
+  "Mélange d'experts (MoE)": `import torch
+import torch.nn as nn
+
+example_text = "plus de paramètres sans plus de calcul"
+
+
+class Experts(nn.Module):
+    """Un routeur choisit, pour chaque token, à quel expert (petit réseau) faire confiance."""
+
+    def __init__(self, size=32, n=4):
+        super().__init__()
+        self.router = nn.Linear(size, n)          # un score par expert
+        self.choice = nn.Softmax(dim=-1)          # scores -> répartition qui somme à 100 %
+        self.experts = nn.ModuleList(
+            nn.Sequential(nn.Linear(size, 64), nn.ReLU(), nn.Linear(64, size)) for _ in range(n))
+
+    def forward(self, x):
+        share = self.choice(self.router(x))
+        answers = torch.stack([expert(x) for expert in self.experts], dim=-1)
+        return (answers * share.unsqueeze(-2)).sum(dim=-1)   # réponses pondérées par le routeur
+
+
+class MoE(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embed = nn.Embedding(1000, 32)
+        self.attention = nn.MultiheadAttention(32, num_heads=4, batch_first=True)
+        self.norm1 = nn.LayerNorm(32)
+        self.moe = Experts()
+        self.norm2 = nn.LayerNorm(32)
+        self.head = nn.Linear(32, 3)
+
+    def forward(self, ids):
+        x = self.embed(ids)
+        seen, _ = self.attention(x, x, x)
+        x = self.norm1(x + seen)                  # Add + Normalize
+        x = self.norm2(x + self.moe(x))           # Add + Normalize
+        return self.head(x.mean(dim=1))
+
+
+model = MoE()
+`,
 };

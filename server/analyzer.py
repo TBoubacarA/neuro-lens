@@ -18,9 +18,11 @@ MAX_PARAMS = 20_000_000
 MAX_MAPS = 8  # cartes d'activation renvoyées par couche
 MAX_MAP_SIZE = 32  # côté maximal d'une carte renvoyée
 MAX_VECTOR = 64  # valeurs renvoyées pour une sortie à plat
-MAX_TOKENS = 16  # tokens renvoyés pour une séquence
+MAX_TOKENS = 20  # tokens renvoyés pour une séquence
 MAX_DIMS = 8  # dimensions affichées par vecteur de token
 MAX_HEADS = 8  # têtes d'attention renvoyées
+MAX_GRAPH_NODES = 5000  # opérations parcourues pour retrouver d'où vient une valeur
+INPUT = -1  # numéro de « l'entrée du modèle » dans les liens entre couches
 DEFAULT_TEXT = "le chat dort sur le canapé du salon"
 
 
@@ -97,8 +99,10 @@ def _preview(out: torch.Tensor) -> dict:
         return {"kind": "maps", "maps": [_normalize(m) for m in maps], "channels": x.shape[0], **stats}
     if x.dim() == 2:  # (tokens, dimensions) : un vecteur par token
         rows = x[:MAX_TOKENS].float()
+        probs = x.shape[1] <= 16 and bool((x >= 0).all()) and bool(((x.float().sum(dim=1) - 1).abs() < 1e-3).all())
         return {
             "kind": "tokens",
+            "probs": probs,  # chaque ligne est une répartition qui somme à 1 (softmax, routeur...)
             "rows": [[round(v, 3) for v in r] for r in rows[:, :MAX_DIMS].tolist()],
             "dim": x.shape[1],
             "length": x.shape[0],
@@ -128,31 +132,63 @@ def _points(x: torch.Tensor) -> list | None:
     return [[round(v, 3) for v in p] for p in pts.tolist()]
 
 
+def _sources(tensors, producers: dict, x: torch.Tensor) -> list[int]:
+    """Remonte le fil des calculs pour trouver quelles couches ont produit ces valeurs.
+
+    On suit le graphe que PyTorch construit pour calculer les gradients : il contient aussi les
+    opérations écrites à la main dans `forward` (x + y, torch.cat...), donc les raccourcis
+    (connexions résiduelles) et les branches parallèles sont retrouvés tels qu'ils sont.
+    """
+    found: set[int] = set()
+    stack = []
+    for t in tensors:
+        if t is x:
+            found.add(INPUT)
+        elif isinstance(t, torch.Tensor) and t.grad_fn is not None:
+            stack.append(t.grad_fn)
+    seen = set()
+    while stack and len(seen) < MAX_GRAPH_NODES:
+        fn = stack.pop()
+        if fn is None or fn in seen:
+            continue
+        seen.add(fn)
+        if fn in producers:
+            found.add(producers[fn])
+            continue
+        stack.extend(parent for parent, _ in fn.next_functions)
+    return sorted(found)
+
+
 def _find_lines(code: str, layers: list[dict]) -> None:
     """Associe chaque couche à la ligne du code qui la crée (meilleur effort)."""
     lines = code.splitlines()
     used: set[int] = set()
-    cursor = 0
-    for layer in layers:
-        found = None
+    pending = []
+    for layer in layers:  # d'abord les couches nommées : self.conv1 = nn.Conv2d(...)
         attr = layer["name"].split(".")[-1]
-        if not attr.isdigit():  # self.conv1 = nn.Conv2d(...)
+        found = None
+        if not attr.isdigit():
             pat = re.compile(rf"\b{re.escape(attr)}\s*=")
-            for i, line in enumerate(lines):
-                if pat.search(line) and i not in used:
-                    found = i
-                    break
-        # Couches dans nn.Sequential : on suit l'ordre des « Type( ». Une couche nommée à
-        # l'intérieur d'un bloc tout fait n'a pas de ligne à elle : voir _group_lines.
-        if found is None and (attr.isdigit() or "." not in layer["name"]):
-            pat = re.compile(rf"\b{re.escape(layer['type'])}\s*\(")
-            for i in range(cursor, len(lines)):
-                if pat.search(lines[i]) and i not in used:
-                    found = i
-                    break
+            found = next((i for i, line in enumerate(lines) if pat.search(line) and i not in used), None)
+        if found is not None:
+            used.add(found)
+            layer["line"] = found + 1
+        elif attr.isdigit() or "." not in layer["name"]:
+            pending.append(layer)
+        # sinon : couche nommée à l'intérieur d'un bloc tout fait, voir _group_lines
+
+    cursor = 0
+    last: dict[str, int] = {}
+    for layer in pending:  # puis les couches d'une liste : on suit l'ordre des « Type( »
+        pat = re.compile(rf"\b{re.escape(layer['type'])}\s*\(")
+        found = next((i for i in range(cursor, len(lines)) if pat.search(lines[i]) and i not in used), None)
         if found is not None:
             used.add(found)
             cursor = found + 1
+            last[layer["type"]] = found
+        elif layer["type"] in last:  # créées en boucle : plusieurs couches pour une seule ligne
+            found = last[layer["type"]]
+        if found is not None:
             layer["line"] = found + 1
 
 
@@ -236,9 +272,13 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
 
     layers: list[dict] = []
     hooks = []
+    producers: dict = {}  # opération PyTorch -> numéro de la couche qui l'a faite
+    if x.is_floating_point():
+        x = x.clone().requires_grad_().clone()  # pour pouvoir suivre le trajet de l'entrée
+        producers[x.grad_fn] = INPUT
 
     def make_hook(name: str):
-        def hook(module, _inp, out):
+        def hook(module, inp, out):
             weights = None
             if isinstance(module, nn.MultiheadAttention):
                 out, weights = out
@@ -247,6 +287,12 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
             if not isinstance(out, torch.Tensor):
                 return
             preview = _preview(out)
+            sources = _sources(inp, producers, x)
+            if out.grad_fn is not None:
+                producers[out.grad_fn] = len(layers)
+            k, stride = getattr(module, "kernel_size", None), getattr(module, "stride", None)
+            if isinstance(module, nn.Conv2d) and k == stride and k[0] > 1 and sources == [INPUT]:
+                preview["patches"] = {"size": list(k), "grid": list(out.shape[2:])}
             if weights is not None:  # (lot, têtes, token qui regarde, token regardé)
                 w = weights.detach()[0][:MAX_HEADS, :MAX_TOKENS, :MAX_TOKENS]
                 preview["attention"] = [[[round(v, 3) for v in row] for row in h] for h in w.tolist()]
@@ -260,6 +306,7 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
                 "n_params": sum(p.numel() for p in module.parameters()),
                 "shape": list(out.shape),
                 "preview": preview,
+                "inputs": sources,
             })
         return hook
 
@@ -273,8 +320,7 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
 
     model.eval()
     try:
-        with torch.no_grad():
-            out = model(x)
+        out = model(x)  # sans torch.no_grad() : _sources a besoin du graphe des calculs
     except Exception as exc:  # noqa: BLE001
         line = _error_line(exc)
         if line is None:  # l'erreur vient de PyTorch : on désigne la première couche qui n'a pas abouti
@@ -306,6 +352,7 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
         "input": described,
         "layers": layers,
         "n_params": n_params,
+        "output_from": _sources([out], producers, x),
     }
     if isinstance(out, torch.Tensor) and out.dim() == 2 and out.shape[1] <= 20:
         probs = torch.softmax(out[0], dim=0)

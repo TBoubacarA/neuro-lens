@@ -128,3 +128,44 @@ def test_text_model_shows_embeddings_and_attention():
     assert len(res["prediction"]["probs"]) == 3
     lines = {l["name"]: l.get("line") for l in res["layers"]}
     assert lines["block.linear1"] == 7 and lines["head"] == 8  # le bloc ne vole pas la ligne de `head`
+
+
+def test_data_flow_finds_shortcuts():
+    res = analyze(TRANSFORMER, text="un deux trois")
+    flow = {l["name"]: [res["layers"][i]["name"] if i >= 0 else "entrée" for i in l["inputs"]] for l in res["layers"]}
+    assert flow["embed"] == ["entrée"]
+    assert flow["block.self_attn"] == ["embed"]
+    # Add + Normalize : la normalisation reçoit l'attention ET le raccourci venu de l'embedding
+    assert flow["block.norm1"] == ["embed", "block.dropout1"]
+    assert flow["block.norm2"] == ["block.norm1", "block.dropout2"]
+    assert [res["layers"][i]["name"] for i in res["output_from"]] == ["head"]
+    assert [l["inputs"] for l in analyze(CNN)["layers"]] == [[-1], [0], [1], [2], [3]]
+
+
+VIT = """import torch
+import torch.nn as nn
+
+class MiniViT(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.patches = nn.Conv2d(1, 16, kernel_size=7, stride=7)
+        self.cls = nn.Parameter(torch.zeros(1, 1, 16))
+        self.head = nn.Linear(16, 10)
+
+    def forward(self, image):
+        x = self.patches(image).flatten(2).transpose(1, 2)
+        x = torch.cat([self.cls, x], dim=1)
+        return self.head(x[:, 0])
+
+model = MiniViT()
+"""
+
+
+def test_patches_and_probability_rows():
+    res = analyze(VIT)
+    assert res["ok"]
+    assert res["layers"][0]["preview"]["patches"] == {"size": [7, 7], "grid": [4, 4]}
+    soft = analyze(TRANSFORMER.replace("self.head = nn.Linear(16, 3)", "self.head = nn.Softmax(dim=-1)")
+                   .replace("self.head(x.mean(dim=1))", "self.head(x)"))
+    assert soft["layers"][-1]["preview"]["probs"] is True
+    assert soft["layers"][0]["preview"]["probs"] is False

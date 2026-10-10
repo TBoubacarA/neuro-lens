@@ -48,6 +48,14 @@
         <p class="hint">Chaque rond est un neurone (ou un canal), chaque flèche une connexion. Plus un rond est lumineux, plus il est actif. Survole une colonne pour retrouver sa ligne de code.</p>
         <div id="graph" class="graph"></div>
       </div>
+      <div class="card graph-card" id="blocks-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Vue blocs</span>
+          <span class="shape" id="blocks-shape"></span>
+        </div>
+        <p class="hint">Le trajet réel des données, de haut en bas. Deux boîtes côte à côte travaillent en parallèle ; une flèche qui contourne des boîtes est un raccourci (connexion résiduelle) ; ⊕ marque l'endroit où deux chemins s'additionnent ou se combinent.</p>
+        <div id="blocks" class="graph"></div>
+      </div>
       <div id="layers"></div>
       <div id="prediction"></div>
     </section>
@@ -56,6 +64,7 @@
   <script src="/static/examples.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script src="/static/graph.js"></script>
+  <script src="/static/blocks.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

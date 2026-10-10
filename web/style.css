@@ -214,3 +214,30 @@ main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
 .graph-col[data-family="embed"] .graph-node { fill: #ff9a85; stroke: #ff9a85; }
 .graph-col[data-family="attn"] .graph-node { fill: var(--act); stroke: var(--act); }
 [hidden] { display: none !important; }
+
+.blocks-svg { display: block; margin: 0 auto; }
+.blocks-edges path, .blocks-edges line { fill: none; stroke: var(--muted); stroke-width: 1.3; }
+.blocks-edges path.skip { stroke: var(--accent); stroke-dasharray: 4 3; }
+.blocks-merge { fill: var(--card); stroke: var(--accent); stroke-width: 1.3; }
+.blocks-merge-sign { text-anchor: middle; fill: var(--accent); font-size: 12px; font-weight: 700; }
+.blocks-node { cursor: pointer; }
+.blocks-node rect { fill: var(--bg); stroke: var(--other); stroke-width: 1.5; }
+.blocks-node[data-family="input"] rect { stroke: #ff9a85; }
+.blocks-node[data-family="embed"] rect { stroke: #ff9a85; }
+.blocks-node[data-family="conv"] rect { stroke: var(--conv); }
+.blocks-node[data-family="pool"] rect { stroke: var(--pool); }
+.blocks-node[data-family="act"] rect, .blocks-node[data-family="attn"] rect { stroke: var(--act); }
+.blocks-node[data-family="dense"] rect { stroke: var(--dense); }
+.blocks-node[data-family="output"] rect { stroke: #4db8ff; }
+.blocks-node.active rect, .blocks-node:hover rect { fill: #7aa2ff26; }
+.blocks-label, .blocks-sub { text-anchor: middle; fill: var(--text); font-size: 11.5px; pointer-events: none; }
+.blocks-label { font-weight: 700; }
+.blocks-sub { fill: var(--muted); font-size: 10px; font-family: ui-monospace, Menlo, monospace; }
+.blocks-group { fill: #ffffff08; stroke: var(--border); stroke-dasharray: 3 3; }
+.blocks-group-label { fill: var(--muted); font-size: 9.5px; }
+
+.patches-box { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.patches { display: grid; gap: 3px; flex: none; }
+.patches canvas { width: 30px; height: 30px; image-rendering: pixelated; border: 1px solid var(--border); border-radius: 2px; }
+.patches-box p { flex: 1; min-width: 160px; margin: 0; }
+.token-table td.best { outline: 1.5px solid var(--ok); font-weight: 700; }

@@ -39,6 +39,7 @@ let decorations = [];
 let timer = null;
 let requestId = 0;
 let lastLayers = [];
+let lastInput = null; // aperçu de l'entrée, pour montrer son découpage en patchs
 let tokens = null;   // mots de la phrase d'entrée, quand le modèle lit du texte
 
 // ---------- Éditeur ----------
@@ -110,7 +111,7 @@ function focusLine(line) {
     c.classList.toggle("active", on);
     if (on && !match) match = c;
   });
-  document.querySelectorAll("#graph .graph-col").forEach((g) => {
+  document.querySelectorAll("#graph .graph-col, #blocks .blocks-node").forEach((g) => {
     g.classList.toggle("active", Number(g.dataset.line) === line);
   });
   if (match) match.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -225,6 +226,7 @@ function render(res) {
 // La carte d'entrée s'adapte au modèle : zone de dessin pour une image, phrase pour du texte.
 function renderInput(input) {
   const isText = input.preview.kind === "text";
+  lastInput = input;
   tokens = isText ? input.tokens : null;
   $("text-input").hidden = !isText;
   $("pad-hint").hidden = $("pad-row").hidden = isText;
@@ -245,6 +247,9 @@ function renderNetwork(res) {
   $("graph-card").hidden = false;
   $("graph-shape").textContent = `${cols.length} colonnes`;
   renderGraph($("graph"), cols, highlightLine, revealLine);
+  $("blocks-card").hidden = false;
+  const skips = renderBlocks($("blocks"), res, highlightLine, revealLine);
+  $("blocks-shape").textContent = skips ? `${skips} raccourci${skips > 1 ? "s" : ""}` : "en ligne droite";
 }
 
 function revealLine(line) {
@@ -303,6 +308,13 @@ function previewEl(p) {
     wrap.appendChild(tokenTable(p));
     if (p.points) wrap.appendChild(scatterEl(p.points));
   } else if (p.kind === "maps") {
+    if (p.patches) {
+      const outer = document.createElement("div");
+      outer.appendChild(patchesEl(p.patches));
+      const inner = previewEl({ ...p, patches: null });
+      outer.appendChild(inner);
+      return outer;
+    }
     wrap.className = "maps";
     p.maps.forEach((m, i) => {
       const fig = document.createElement("figure");
@@ -340,7 +352,40 @@ function previewEl(p) {
   return wrap;
 }
 
-const tokenLabel = (i) => (tokens && tokens[i] !== undefined ? tokens[i] : `token ${i}`);
+const tokenLabel = (i) => (tokens && tokens[i] !== undefined ? tokens[i] : `${i}`);
+
+// L'image d'entrée découpée en patchs : chaque morceau deviendra un token.
+function patchesEl({ size, grid }) {
+  const box = document.createElement("div");
+  box.className = "patches-box";
+  const img = lastInput?.preview.maps?.[0];
+  if (!img) return box;
+  const scale = img.length / (grid[0] * size[0]); // l'aperçu peut être plus petit que l'image
+  const [ph, pw] = [Math.round(size[0] * scale), Math.round(size[1] * scale)];
+  const g = document.createElement("div");
+  g.className = "patches";
+  g.style.gridTemplateColumns = `repeat(${grid[1]}, auto)`;
+  for (let r = 0; r < grid[0]; r++) for (let c = 0; c < grid[1]; c++) {
+    const cv = document.createElement("canvas");
+    cv.width = pw; cv.height = ph;
+    const ctx = cv.getContext("2d");
+    const data = ctx.createImageData(pw, ph);
+    for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const v = Math.round((img[r * ph + y]?.[c * pw + x] ?? 0) * 255);
+      data.data.set([v, v, v, 255], (y * pw + x) * 4);
+    }
+    ctx.putImageData(data, 0, 0);
+    cv.title = `patch ${r * grid[1] + c}`;
+    g.appendChild(cv);
+  }
+  box.appendChild(g);
+  const note = document.createElement("p");
+  note.className = "meta";
+  note.textContent = `L'image est découpée en ${grid[0] * grid[1]} patchs de ${size[0]}×${size[1]} pixels. ` +
+    "Chaque patch devient un token, comme un mot dans une phrase ; les cartes ci-dessous montrent ce que chaque filtre en retient.";
+  box.appendChild(note);
+  return box;
+}
 
 // Un vecteur par token : une ligne de cases, bleue si la valeur est positive, rouge si négative.
 function tokenTable(p) {
@@ -352,8 +397,10 @@ function tokenTable(p) {
     tr.insertCell().textContent = tokenLabel(i);
     row.forEach((v) => {
       const td = tr.insertCell();
-      td.textContent = v.toFixed(2);
-      td.style.background = `rgba(${v >= 0 ? "91,140,255" : "255,107,107"},${(Math.abs(v) / max * 0.85).toFixed(2)})`;
+      td.textContent = p.probs ? `${Math.round(v * 100)} %` : v.toFixed(2);
+      const color = p.probs ? "76,217,138" : v >= 0 ? "91,140,255" : "255,107,107";
+      td.style.background = `rgba(${color},${(Math.abs(v) / max * 0.85).toFixed(2)})`;
+      if (p.probs && v === Math.max(...row)) td.className = "best";
     });
     if (p.dim > row.length) tr.insertCell().textContent = "…";
   });
@@ -362,7 +409,8 @@ function tokenTable(p) {
   box.appendChild(table);
   const note = document.createElement("div");
   note.className = "meta";
-  note.textContent = `${Math.min(p.dim, p.rows[0].length)} premières dimensions sur ${p.dim}` +
+  note.textContent = (p.probs ? "Chaque ligne se partage 100 % ; la case encadrée est le choix le plus fort"
+    : `${Math.min(p.dim, p.rows[0].length)} premières dimensions sur ${p.dim}`) +
     (p.length > p.rows.length ? ` · ${p.rows.length} premiers tokens sur ${p.length}` : "");
   box.appendChild(note);
   return box;
