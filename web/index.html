@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>neuro-lens</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Ccircle cx=%278%27 cy=%278%27 r=%276%27 fill=%27%237aa2ff%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="dot"></span>neuro-lens</div>
+    <select id="examples" aria-label="Exemples"></select>
+    <span id="status" class="status">…</span>
+  </header>
+
+  <main>
+    <section class="pane code-pane">
+      <div id="editor"></div>
+      <div id="error" class="error" hidden></div>
+    </section>
+
+    <section class="pane lens-pane" id="lens">
+      <div class="card input-card">
+        <div class="card-head">
+          <span class="tag tag-input">Entrée</span>
+          <span class="shape">1 × 28 × 28</span>
+        </div>
+        <p class="hint">Dessine un chiffre : le réseau se recalcule à chaque trait.</p>
+        <div class="input-row">
+          <canvas id="pad" width="28" height="28"></canvas>
+          <div class="input-actions">
+            <button id="clear">Effacer</button>
+            <button id="seven">Exemple « 7 »</button>
+          </div>
+        </div>
+      </div>
+      <div id="layers"></div>
+      <div id="prediction"></div>
+    </section>
+  </main>
+
+  <script src="/static/examples.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
