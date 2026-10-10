@@ -39,6 +39,8 @@ let decorations = [];
 let timer = null;
 let requestId = 0;
 let lastLayers = [];
+let lastShape = "";    // forme du dernier réseau affiché
+let lastResult = null; // pour rejouer la construction
 let otherKind = false; // le dernier affichage réussi n'était pas un réseau PyTorch
 let lastInput = null; // aperçu de l'entrée, pour montrer son découpage en patchs
 let tokens = null;   // mots de la phrase d'entrée, quand le modèle lit du texte
@@ -204,6 +206,7 @@ async function run() {
 // Un modèle scikit-learn ou un agent : pas de couches, donc pas d'entrée à dessiner ni de vue réseau.
 function renderOther(res) {
   lastLayers = [];
+  lastShape = "";
   tokens = null;
   ["input-card", "graph-card", "blocks-card"].forEach((id) => { $(id).hidden = true; });
   $("prediction").innerHTML = "";
@@ -231,8 +234,13 @@ function render(res) {
     setStatus(`${res.layers.length} couches · ${fmtN(res.n_params)} paramètres`, "ok");
     lastLayers = res.layers;
     renderInput(res.input);
-    renderLayers(res.layers, null);
-    renderNetwork(res);
+    // Le réseau a changé de forme (pas seulement le dessin) : on le reconstruit couche par couche.
+    const shape = res.layers.map((l) => `${l.type}:${l.shape.join("x")}`).join("|");
+    const build = shape !== lastShape;
+    lastShape = shape;
+    lastResult = res;
+    renderLayers(res.layers, null, build);
+    renderNetwork(res, build);
     renderPrediction(res.prediction);
   } else {
     err.hidden = false;
@@ -266,11 +274,11 @@ function renderInput(input) {
   });
 }
 
-function renderNetwork(res) {
+function renderNetwork(res, build) {
   const cols = columnsFromLayers(res.input, res.layers, res.prediction);
   $("graph-card").hidden = false;
   $("graph-shape").textContent = `${cols.length} colonnes`;
-  renderGraph($("graph"), cols, highlightLine, revealLine);
+  renderGraph($("graph"), cols, highlightLine, revealLine, build);
   $("blocks-card").hidden = false;
   const skips = renderBlocks($("blocks"), res, highlightLine, revealLine);
   $("blocks-shape").textContent = skips ? `${skips} raccourci${skips > 1 ? "s" : ""}` : "en ligne droite";
@@ -283,10 +291,13 @@ function revealLine(line) {
   editor.focus();
 }
 
-function renderLayers(layers, failure) {
+function renderLayers(layers, failure, build) {
   const root = $("layers");
   root.innerHTML = "";
-  layers.forEach((l) => root.appendChild(layerCard(l)));
+  layers.forEach((l, i) => {
+    const card = root.appendChild(layerCard(l));
+    if (build) { card.classList.add("build"); card.style.setProperty("--d", `${(i * 0.32).toFixed(2)}s`); }
+  });
   if (failure) {
     const c = document.createElement("div");
     c.className = "card failed";
@@ -526,6 +537,11 @@ function renderPrediction(pred) {
   select.addEventListener("change", () => { $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
   paintPad(seven());
   $("text").addEventListener("input", schedule);
+  $("replay").addEventListener("click", () => {
+    if (!lastResult) return;
+    renderLayers(lastResult.layers, null, true);
+    renderNetwork(lastResult, true);
+  });
   await initEditor(window.NEURO_EXAMPLES[select.value]);
   run();
 })();

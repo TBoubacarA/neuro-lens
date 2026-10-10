@@ -16,7 +16,7 @@ import torch.nn as nn
 
 FILENAME = "<editeur>"
 MAX_PARAMS = 20_000_000
-MAX_MAPS = 8  # cartes d'activation renvoyées par couche
+MAX_MAPS = 16  # cartes d'activation renvoyées par couche
 MAX_MAP_SIZE = 32  # côté maximal d'une carte renvoyée
 MAX_VECTOR = 64  # valeurs renvoyées pour une sortie à plat
 MAX_TOKENS = 20  # tokens renvoyés pour une séquence

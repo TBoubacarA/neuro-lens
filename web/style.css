@@ -275,3 +275,15 @@ main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
 .steps dt { font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
 .steps dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
 .stopped { color: var(--danger); }
+
+button.small { padding: 2px 8px; font-size: 12px; }
+.graph-map { image-rendering: pixelated; }
+.graph-node.framed { fill: none !important; }
+@keyframes nl-in { from { opacity: 0; transform: translateY(8px); } }
+.graph-svg.build .graph-col, .graph-svg.build .graph-edges line, .card.build {
+  animation: nl-in .45s ease-out backwards;
+  animation-delay: var(--d, 0s);
+}
+@media (prefers-reduced-motion: reduce) {
+  .graph-svg.build .graph-col, .graph-svg.build .graph-edges line, .card.build { animation: none; }
+}

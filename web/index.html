@@ -43,9 +43,10 @@
       <div class="card graph-card" id="graph-card" hidden>
         <div class="card-head">
           <span class="tag tag-input">Vue réseau</span>
+          <button id="replay" class="small" title="Rejouer la construction couche par couche">▶ Rejouer la construction</button>
           <span class="shape" id="graph-shape"></span>
         </div>
-        <p class="hint">Chaque rond est un neurone (ou un canal), chaque flèche une connexion. Plus un rond est lumineux, plus il est actif. Survole une colonne pour retrouver sa ligne de code.</p>
+        <p class="hint">Chaque rond est un neurone, chaque vignette un canal qui montre ce qu'il voit de ton dessin ; chaque flèche est une connexion. Plus un rond est lumineux, plus il est actif. Le nombre de nœuds est celui écrit dans le code (au-delà de 16, « ⋮ » résume la suite). Survole une colonne pour retrouver sa ligne de code.</p>
         <div id="graph" class="graph"></div>
       </div>
       <div class="card graph-card" id="blocks-card" hidden>

@@ -6,7 +6,8 @@
 // ou "one" (un vers un). Tout ce qui sait produire ces colonnes peut être dessiné ici.
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const GRAPH = { colGap: 132, rowGap: 30, radius: 11, maxNodes: 7, maxOut: 10, padX: 46, padTop: 20, padBottom: 46 };
+// Jusqu'à `maxNodes` unités, on les dessine toutes : 8 filtres dans le code = 8 nœuds à l'écran.
+const GRAPH = { colGap: 140, rowGap: 37, radius: 15, maxNodes: 16, padX: 46, padTop: 20, padBottom: 46, stagger: 0.32 };
 
 // Couches qui transforment les valeurs sans changer le nombre de neurones :
 // on les note sous la colonne précédente au lieu d'en créer une nouvelle.
@@ -37,6 +38,7 @@ function columnsFromLayers(input, layers, prediction) {
   const cols = [{
     label: "Entrée", sub: input.shape.slice(1).join("×"), family: "input",
     count: unitCount(input.shape, input.preview), values: unitValues(input.preview), link: null, line: null,
+    maps: input.preview.maps, gray: true,
   }];
   layers.forEach((l) => {
     const prev = cols[cols.length - 1];
@@ -44,12 +46,14 @@ function columnsFromLayers(input, layers, prediction) {
     if (INLINE.has(l.type) && cols.length > 1 && count === prev.count) {
       prev.sub = `${prev.sub} → ${l.type}`;
       prev.values = unitValues(l.preview);
+      prev.maps = l.preview.maps;
       return;
     }
     const family = FAMILY[l.type] ?? "other";
     cols.push({
       label: l.type, sub: l.shape.slice(1).join("×"), family, count,
       values: unitValues(l.preview),
+      maps: l.preview.maps,
       link: family === "pool" && count === prev.count ? "one" : "full",
       line: l.line ?? null,
     });
@@ -70,6 +74,18 @@ function visibleUnits(count, max) {
   return [...head, null, count - 1];
 }
 
+// Petite image d'une carte d'activation, pour la poser à la place du rond.
+function mapImage(map, gray) {
+  const cv = document.createElement("canvas");
+  cv.width = map[0].length;
+  cv.height = map.length;
+  const ctx = cv.getContext("2d");
+  const data = ctx.createImageData(cv.width, cv.height);
+  map.flat().forEach((v, j) => data.data.set(gray ? [v * 255, v * 255, v * 255, 255] : heat(v), j * 4));
+  ctx.putImageData(data, 0, 0);
+  return cv.toDataURL();
+}
+
 function el(name, attrs, text) {
   const node = document.createElementNS(SVG_NS, name);
   Object.entries(attrs).forEach(([k, v]) => node.setAttribute(k, v));
@@ -77,11 +93,11 @@ function el(name, attrs, text) {
   return node;
 }
 
-function renderGraph(root, cols, onHover, onPick) {
+function renderGraph(root, cols, onHover, onPick, build) {
   root.innerHTML = "";
   const g = GRAPH;
   const placed = cols.map((c, i) => {
-    const units = visibleUnits(c.count, c.family === "output" ? g.maxOut : g.maxNodes);
+    const units = visibleUnits(c.count, g.maxNodes);
     return { ...c, units, x: g.padX + i * g.colGap };
   });
   const rows = Math.max(...placed.map((c) => c.units.length));
@@ -90,7 +106,9 @@ function renderGraph(root, cols, onHover, onPick) {
   const height = g.padTop + g.radius * 2 + bodyH + g.padBottom;
   const yOf = (c, k) => g.padTop + g.radius + (bodyH - (c.units.length - 1) * g.rowGap) / 2 + k * g.rowGap;
 
-  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, width, height, class: "graph-svg" });
+  // `build` : le réseau se construit sous les yeux, une couche après l'autre.
+  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, width, height, class: build ? "graph-svg build" : "graph-svg" });
+  const delay = (i, late) => `--d:${(i * g.stagger + (late ? g.stagger / 2 : 0)).toFixed(2)}s`;
   svg.appendChild(el("defs", {})).innerHTML =
     '<marker id="nl-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">' +
     '<path d="M0,0 L8,4 L0,8 z" class="graph-arrow"/></marker>';
@@ -106,14 +124,14 @@ function renderGraph(root, cols, onHover, onPick) {
         if (c.link === "one" && u !== v) return;
         edges.appendChild(el("line", {
           x1: p.x + g.radius, y1: yOf(p, j), x2: c.x - g.radius - 2, y2: yOf(c, k),
-          "marker-end": "url(#nl-arrow)", "data-col": i,
+          "marker-end": "url(#nl-arrow)", "data-col": i, style: delay(i - 1, true),
         }));
       });
     });
   });
 
   placed.forEach((c, i) => {
-    const group = svg.appendChild(el("g", { class: "graph-col", "data-family": c.family, "data-col": i }));
+    const group = svg.appendChild(el("g", { class: "graph-col", "data-family": c.family, "data-col": i, style: delay(i) }));
     if (c.line) group.dataset.line = c.line;
     c.units.forEach((u, k) => {
       const y = yOf(c, k);
@@ -122,9 +140,18 @@ function renderGraph(root, cols, onHover, onPick) {
         return;
       }
       const v = c.values[u];
-      const node = el("circle", { cx: c.x, cy: y, r: g.radius, class: "graph-node" });
-      // Plus le neurone est actif, plus il est lumineux.
-      node.style.fillOpacity = v === undefined ? 0.35 : 0.25 + 0.75 * Math.min(1, v);
+      let node;
+      if (c.maps?.[u]) { // un canal : on montre ce qu'il voit vraiment du dessin
+        group.appendChild(el("image", {
+          href: mapImage(c.maps[u], c.gray), x: c.x - g.radius, y: y - g.radius,
+          width: g.radius * 2, height: g.radius * 2, class: "graph-map", preserveAspectRatio: "none",
+        }));
+        node = el("rect", { x: c.x - g.radius, y: y - g.radius, width: g.radius * 2, height: g.radius * 2, rx: 3, class: "graph-node framed" });
+      } else {
+        node = el("circle", { cx: c.x, cy: y, r: g.radius, class: "graph-node" });
+        // Plus le neurone est actif, plus il est lumineux.
+        node.style.fillOpacity = v === undefined ? 0.35 : 0.25 + 0.75 * Math.min(1, v);
+      }
       if (c.top === u) node.classList.add("top");
       node.appendChild(el("title", {}, `${c.label} · unité ${u}${v === undefined ? "" : ` · activité ${v.toFixed(2)}`}`));
       group.appendChild(node);
