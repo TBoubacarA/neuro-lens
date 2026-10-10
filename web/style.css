@@ -241,3 +241,37 @@ main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
 .patches canvas { width: 30px; height: 30px; image-rendering: pixelated; border: 1px solid var(--border); border-radius: 2px; }
 .patches-box p { flex: 1; min-width: 160px; margin: 0; }
 .token-table td.best { outline: 1.5px solid var(--ok); font-weight: 700; }
+
+.mono { font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+.plot { display: block; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); max-width: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+.tree-svg, .agent-svg { display: block; margin: 0 auto; }
+.tree-edge { stroke: var(--muted); stroke-width: 1.2; }
+.tree-yesno, .agent-edge-label { text-anchor: middle; fill: var(--muted); font-size: 10px; paint-order: stroke; stroke: var(--card); stroke-width: 4px; }
+.tree-node rect { fill: var(--bg); stroke: var(--other); stroke-width: 1.5; }
+.hbars > div { display: grid; grid-template-columns: 110px 1fr 60px; gap: 8px; align-items: center; font-size: 12px; margin: 4px 0; }
+.hbars span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.hbars div > div { background: var(--bg); border-radius: 3px; height: 12px; }
+.hbars i { display: block; height: 100%; border-radius: 3px; }
+.hbars b { font: 11px ui-monospace, Menlo, monospace; font-weight: 400; }
+
+.agent-edge { fill: none; stroke: var(--muted); stroke-width: 1.4; opacity: .7; }
+.agent-edge.choice { stroke-dasharray: 5 4; }
+.agent-edge.on { stroke: var(--ok); stroke-width: 2.2; opacity: 1; }
+.agent-arrow { fill: var(--muted); }
+.agent-arrow-on { fill: var(--ok); }
+.agent-node { cursor: pointer; }
+.agent-node rect { fill: var(--bg); stroke: var(--other); stroke-width: 1.5; }
+.agent-node.step rect { stroke: var(--act); }
+.agent-node.on rect { stroke: var(--ok); }
+.agent-node.active rect, .agent-node:hover rect { fill: #7aa2ff33; }
+.agent-order { text-anchor: end; fill: var(--ok); font-size: 9.5px; }
+.steps > div { display: grid; grid-template-columns: 22px 110px 1fr; gap: 8px; padding: 6px 4px; border-top: 1px solid var(--border); font-size: 12px; cursor: default; }
+.steps > div:hover { background: #7aa2ff14; }
+.steps b { color: var(--ok); text-align: right; }
+.step-name { font-weight: 700; }
+.steps dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; color: var(--muted); }
+.steps dt { font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+.steps dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
+.stopped { color: var(--danger); }

@@ -165,4 +165,101 @@ class MoE(nn.Module):
 
 model = MoE()
 `,
+
+  "ML classique : arbre de décision": `from sklearn.datasets import make_moons
+from sklearn.tree import DecisionTreeClassifier
+
+# Deux croissants de points mélangés : X = leur position, y = leur couleur (0 ou 1).
+X, y = make_moons(n_samples=200, noise=0.25, random_state=0)
+
+# Change max_depth : plus l'arbre est profond, plus sa frontière est découpée.
+model = DecisionTreeClassifier(max_depth=3, random_state=0)
+`,
+
+  "ML classique : comparer les modèles": `from sklearn.datasets import make_moons
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+
+X, y = make_moons(n_samples=200, noise=0.25, random_state=0)
+
+# Garde une seule ligne « model = ... » active et regarde la frontière changer.
+model = LogisticRegression()
+# model = KNeighborsClassifier(n_neighbors=5)
+# model = RandomForestClassifier(n_estimators=50, max_depth=4, random_state=0)
+# model = SVC(kernel="rbf", C=1.0)
+`,
+
+  "ML classique : régression": `import numpy as np
+from sklearn.linear_model import LinearRegression
+
+# Surface d'un logement (m²) -> prix (k€), avec un peu de hasard.
+rng = np.random.default_rng(0)
+X = rng.uniform(20, 120, size=(80, 1))
+y = 3.2 * X[:, 0] + 40 + rng.normal(0, 25, size=80)
+
+model = LinearRegression()
+`,
+
+  "ML classique : regroupement (K-means)": `from sklearn.datasets import load_iris
+from sklearn.cluster import KMeans
+
+# 150 fleurs décrites par 4 mesures. Pas de y : le modèle cherche les groupes tout seul.
+X = load_iris().data
+
+model = KMeans(n_clusters=3, n_init=10, random_state=0)
+`,
+
+  "Agent IA (LangGraph)": `from typing import TypedDict
+from langgraph.graph import StateGraph, START, END
+
+# Un agent = une boucle « réfléchir -> utiliser un outil -> réfléchir -> ... -> répondre ».
+# Ici le « cerveau » est une fonction simple, pour tourner sans clé d'API : remplace
+# reflechir() par un appel à un vrai modèle de langage quand tu veux.
+
+
+class Etat(TypedDict):
+    question: str
+    notes: list      # ce que l'agent a appris en route
+    action: str      # ce qu'il a décidé de faire ensuite
+    reponse: str
+
+
+def reflechir(etat):
+    notes = etat["notes"]
+    if not any(n.startswith("recherche") for n in notes):
+        return {"action": "chercher"}
+    if not any(n.startswith("calcul") for n in notes):
+        return {"action": "calculer"}
+    return {"action": "repondre"}
+
+
+def chercher(etat):   # outil 1 : une fausse recherche
+    return {"notes": etat["notes"] + ["recherche : la tour Eiffel mesure 330 m"]}
+
+
+def calculer(etat):   # outil 2 : une calculatrice
+    return {"notes": etat["notes"] + [f"calcul : 330 m = {330 * 100} cm"]}
+
+
+def repondre(etat):
+    return {"reponse": "La tour Eiffel mesure 33 000 cm."}
+
+
+graph = StateGraph(Etat)
+graph.add_node("reflechir", reflechir)
+graph.add_node("chercher", chercher)
+graph.add_node("calculer", calculer)
+graph.add_node("repondre", repondre)
+graph.add_edge(START, "reflechir")
+graph.add_conditional_edges("reflechir", lambda etat: etat["action"],
+                            {"chercher": "chercher", "calculer": "calculer", "repondre": "repondre"})
+graph.add_edge("chercher", "reflechir")   # après un outil, on revient réfléchir
+graph.add_edge("calculer", "reflechir")
+graph.add_edge("repondre", END)
+
+state = {"question": "Combien de centimètres mesure la tour Eiffel ?",
+         "notes": [], "action": "", "reponse": ""}
+`,
 };

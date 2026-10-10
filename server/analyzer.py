@@ -1,6 +1,7 @@
-"""Exécute le code du modèle écrit dans l'éditeur et décrit ce qui se passe dans chaque couche.
+"""Exécute le code écrit dans l'éditeur et décrit ce qui se passe à l'intérieur.
 
-Le code doit définir une variable `model` (un torch.nn.Module). On fait passer une image
+Trois cas : un réseau PyTorch (détaillé ici), un modèle scikit-learn (server/ml.py) ou un agent
+LangGraph (server/agents.py). Pour PyTorch, le code définit `model` (un torch.nn.Module). On fait passer une image
 d'entrée dans le modèle, on capture la sortie de chaque couche avec des hooks, et on renvoie
 une description JSON que la page web dessine.
 """
@@ -239,6 +240,33 @@ def _group_lines(code: str, model: nn.Module, layers: list[dict]) -> None:
             layer["line"] = line
 
 
+def _other_kinds(code: str, namespace: dict) -> dict:
+    """Ce qui n'est pas un réseau PyTorch : un modèle scikit-learn ou un agent LangGraph."""
+    from server import agents, ml
+
+    model, graph = namespace.get("model"), namespace.get("graph")
+    try:
+        if model is not None and ml.is_sklearn(model):
+            result = ml.describe(model, namespace)
+            name = "model"
+        elif graph is not None and agents.is_langgraph(graph):
+            result = agents.describe(graph, namespace, code)
+            name = "graph"
+        else:
+            return {
+                "ok": False,
+                "error": "Définis `model` (un nn.Module PyTorch ou un modèle scikit-learn) ou `graph` (un agent LangGraph).",
+                "line": None,
+            }
+    except ModuleNotFoundError as exc:
+        return {"ok": False, "error": f"Il manque le paquet « {exc.name} » : pip install -r requirements.txt", "line": None}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": _explain(exc), "line": _error_line(exc)}
+    match = re.search(rf"^{name}\s*=", code, re.M)
+    result["line"] = code[: match.start()].count("\n") + 1 if match else None
+    return result
+
+
 def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None = None) -> dict:
     """Point d'entrée : code Python -> description des couches et de leurs sorties."""
     namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
@@ -249,7 +277,7 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
 
     model = namespace.get("model")
     if not isinstance(model, nn.Module):
-        return {"ok": False, "error": "Définis une variable `model` qui est un nn.Module.", "line": None}
+        return _other_kinds(code, namespace)
 
     n_params = sum(p.numel() for p in model.parameters())
     if n_params > MAX_PARAMS:

@@ -169,3 +169,80 @@ def test_patches_and_probability_rows():
                    .replace("self.head(x.mean(dim=1))", "self.head(x)"))
     assert soft["layers"][-1]["preview"]["probs"] is True
     assert soft["layers"][0]["preview"]["probs"] is False
+
+
+TREE = """from sklearn.datasets import make_moons
+from sklearn.tree import DecisionTreeClassifier
+
+X, y = make_moons(n_samples=120, noise=0.2, random_state=0)
+model = DecisionTreeClassifier(max_depth=3)
+"""
+
+
+def test_sklearn_tree_is_trained_and_described():
+    res = analyze(TREE)
+    assert res["ok"] and res["kind"] == "ml" and res["line"] == 5
+    assert res["estimator"] == "DecisionTreeClassifier" and res["trained_here"]
+    assert res["classes"] == ["0", "1"] and 0.8 < res["score"] <= 1
+    root = res["tree"]["root"]
+    assert root["samples"] == 120 and root["feature"] in ("x1", "x2") and len(root["children"]) == 2
+    regions = res["scatter"]["regions"]["cells"]
+    assert len(regions) == len(regions[0]) and {c for row in regions for c in row} == {0, 1}
+    assert len(res["scatter"]["points"]) == 120 and len(res["importances"]) == 2
+
+
+def test_sklearn_regression_and_clustering():
+    reg = analyze("import numpy as np\nfrom sklearn.linear_model import LinearRegression\n"
+                  "X = np.arange(20).reshape(-1, 1)\ny = 3 * X[:, 0] + 1\nmodel = LinearRegression()\n")
+    assert reg["ok"] and reg["task"] == "regression" and reg["score"] > 0.99
+    assert abs(reg["coefficients"][0]["value"] - 3) < 1e-6 and len(reg["curve"]["x"]) == 80
+    km = analyze("from sklearn.datasets import load_iris\nfrom sklearn.cluster import KMeans\n"
+                 "X = load_iris().data\nmodel = KMeans(n_clusters=3, n_init=5, random_state=0)\n")
+    assert km["ok"] and km["task"] == "clustering" and km["scatter"]["projected"]
+    assert set(km["scatter"]["labels"]) == {0, 1, 2}
+    assert not analyze("from sklearn.svm import SVC\nmodel = SVC()\n")["ok"]  # pas de données
+
+
+AGENT = """from typing import TypedDict
+from langgraph.graph import StateGraph, START, END
+
+class State(TypedDict):
+    notes: list
+    answer: str
+
+def think(state):
+    return {"notes": state["notes"] + ["?"]}
+
+def route(state):
+    return "tool" if len(state["notes"]) < 2 else "done"
+
+def tool(state):
+    return {"notes": state["notes"] + ["42"]}
+
+def reply(state):
+    return {"answer": state["notes"][-1]}
+
+graph = StateGraph(State)
+graph.add_node("think", think)
+graph.add_node("tool", tool)
+graph.add_node("reply", reply)
+graph.add_edge(START, "think")
+graph.add_conditional_edges("think", route, {"tool": "tool", "done": "reply"})
+graph.add_edge("tool", "think")
+graph.add_edge("reply", END)
+
+state = {"notes": [], "answer": ""}
+"""
+
+
+def test_agent_graph_and_run():
+    res = analyze(AGENT)
+    assert res["ok"] and res["kind"] == "agent"
+    assert [n["id"] for n in res["nodes"]] == ["__start__", "think", "tool", "reply", "__end__"]
+    assert next(n for n in res["nodes"] if n["id"] == "tool")["line"] == 22
+    assert {"source": "think", "target": "reply", "conditional": True, "label": "done"} in res["edges"]
+    assert [s["node"] for s in res["steps"]] == ["think", "tool", "think", "reply"]
+    assert res["final"]["answer"] == "?"
+    loop = analyze(AGENT.replace("< 2", "< 999"))
+    assert "tourne en rond" in loop["stopped"] and len(loop["steps"]) > 10
+    assert "state" in analyze(AGENT.replace("state = {", "start = {"))["hint"]

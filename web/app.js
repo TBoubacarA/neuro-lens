@@ -39,6 +39,7 @@ let decorations = [];
 let timer = null;
 let requestId = 0;
 let lastLayers = [];
+let otherKind = false; // le dernier affichage réussi n'était pas un réseau PyTorch
 let lastInput = null; // aperçu de l'entrée, pour montrer son découpage en patchs
 let tokens = null;   // mots de la phrase d'entrée, quand le modèle lit du texte
 
@@ -106,7 +107,7 @@ function setErrorMarker(line, message) {
 // La ligne sous le curseur allume la carte de la couche correspondante.
 function focusLine(line) {
   let match = null;
-  document.querySelectorAll("#layers .card").forEach((c) => {
+  document.querySelectorAll("#layers .card, #layers .agent-node").forEach((c) => {
     const on = Number(c.dataset.line) === line;
     c.classList.toggle("active", on);
     if (on && !match) match = c;
@@ -200,9 +201,31 @@ async function run() {
   render(res);
 }
 
+// Un modèle scikit-learn ou un agent : pas de couches, donc pas d'entrée à dessiner ni de vue réseau.
+function renderOther(res) {
+  lastLayers = [];
+  tokens = null;
+  ["input-card", "graph-card", "blocks-card"].forEach((id) => { $(id).hidden = true; });
+  $("prediction").innerHTML = "";
+  if (res.kind === "ml") {
+    setStatus(`${res.estimator} · ${res.n_samples} exemples`, "ok");
+    renderML($("layers"), res, highlightLine, revealLine);
+  } else {
+    setStatus(`agent · ${res.steps.length} passage${res.steps.length > 1 ? "s" : ""}`, res.stopped ? "err" : "ok");
+    renderAgent($("layers"), res, highlightLine, revealLine);
+  }
+}
+
 function render(res) {
   const err = $("error");
-  if (res.ok) {
+  if (res.ok && res.kind) {
+    err.hidden = true;
+    setErrorMarker(null);
+    otherKind = true;
+    renderOther(res);
+  } else if (res.ok) {
+    otherKind = false;
+    $("input-card").hidden = false;
     err.hidden = true;
     setErrorMarker(null);
     setStatus(`${res.layers.length} couches · ${fmtN(res.n_params)} paramètres`, "ok");
@@ -217,6 +240,7 @@ function render(res) {
     setErrorMarker(res.line, res.error);
     setStatus("erreur", "err");
     // On garde les couches qui ont fonctionné, puis une carte rouge là où ça casse.
+    if (otherKind && !res.layers) return; // on garde le dernier affichage pendant la frappe
     const partial = res.layers ?? lastLayers;
     renderLayers(partial, res.layers ? res : null);
     $("prediction").innerHTML = "";
