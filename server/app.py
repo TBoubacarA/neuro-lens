@@ -20,7 +20,7 @@ TIMEOUT_S = 10
 
 
 def _worker_loop(conn) -> None:
-    from server.dispatch import analyze
+    from server.analyzer import analyze
 
     conn.send("ready")  # importer PyTorch peut prendre plusieurs secondes : hors du délai
     while True:
