@@ -16,13 +16,16 @@ const EXPLAIN = {
   Dropout: (p) => `Pendant l'entraînement, éteint au hasard ${Math.round((p.p ?? 0.5) * 100)} % des neurones (inactif ici, en mode évaluation).`,
   BatchNorm2d: () => "Recentre et met à l'échelle chaque canal pour stabiliser l'apprentissage.",
   Softmax: () => "Transforme les scores en probabilités qui somment à 1.",
+  Embedding: (p) => `Remplace chaque token par un vecteur de ${p.embedding_dim} nombres, lu dans une table de ${p.num_embeddings} lignes. Deux fois le même mot donnent deux fois le même vecteur.`,
+  MultiheadAttention: (p) => `Chaque token regarde tous les autres et choisit à qui prêter attention, ${p.num_heads} fois en parallèle (${p.num_heads} têtes). Une case claire : ce token (ligne) regarde beaucoup celui-là (colonne).`,
+  LayerNorm: () => "Recentre et met à l'échelle le vecteur de chaque token pour stabiliser l'apprentissage.",
 };
 
 const FAMILY = {
   Conv2d: "conv", Conv1d: "conv", ConvTranspose2d: "conv",
   MaxPool2d: "pool", AvgPool2d: "pool", AdaptiveAvgPool2d: "pool",
   ReLU: "act", LeakyReLU: "act", Sigmoid: "act", Tanh: "act", GELU: "act", Softmax: "act",
-  Linear: "dense",
+  Linear: "dense", Embedding: "embed", MultiheadAttention: "attn",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -36,6 +39,7 @@ let decorations = [];
 let timer = null;
 let requestId = 0;
 let lastLayers = [];
+let tokens = null;   // mots de la phrase d'entrée, quand le modèle lit du texte
 
 // ---------- Éditeur ----------
 
@@ -185,7 +189,7 @@ async function run() {
     const r = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: getCode(), pixels }),
+      body: JSON.stringify({ code: getCode(), pixels, text: $("text").value || null }),
     });
     res = await r.json();
   } catch (e) {
@@ -202,6 +206,7 @@ function render(res) {
     setErrorMarker(null);
     setStatus(`${res.layers.length} couches · ${fmtN(res.n_params)} paramètres`, "ok");
     lastLayers = res.layers;
+    renderInput(res.input);
     renderLayers(res.layers, null);
     renderNetwork(res);
     renderPrediction(res.prediction);
@@ -215,6 +220,24 @@ function render(res) {
     renderLayers(partial, res.layers ? res : null);
     $("prediction").innerHTML = "";
   }
+}
+
+// La carte d'entrée s'adapte au modèle : zone de dessin pour une image, phrase pour du texte.
+function renderInput(input) {
+  const isText = input.preview.kind === "text";
+  tokens = isText ? input.tokens : null;
+  $("text-input").hidden = !isText;
+  $("pad-hint").hidden = $("pad-row").hidden = isText;
+  $("input-shape").textContent = isText ? `${input.tokens.length} tokens` : fmtShape(input.shape);
+  if (!isText) return;
+  if (!$("text").value) $("text").value = input.text;
+  $("tokens").innerHTML = "";
+  input.tokens.forEach((t, i) => {
+    const chip = document.createElement("span");
+    chip.innerHTML = `<b></b><i>n° ${input.preview.ids[i]}</i>`;
+    chip.querySelector("b").textContent = t;
+    $("tokens").appendChild(chip);
+  });
 }
 
 function renderNetwork(res) {
@@ -257,6 +280,7 @@ function layerCard(l) {
     <div class="card-head">
       <span class="tag">${l.type}</span>
       <span class="name">${l.name}</span>
+      ${l.group ? `<span class="line-ref">dans ${l.group.type}</span>` : ""}
       ${l.line ? `<span class="line-ref">ligne ${l.line}</span>` : ""}
       <span class="shape" title="forme de la sortie">${fmtShape(l.shape)}</span>
     </div>
@@ -274,7 +298,11 @@ function layerCard(l) {
 
 function previewEl(p) {
   const wrap = document.createElement("div");
-  if (p.kind === "maps") {
+  if (p.kind === "tokens") {
+    if (p.attention) wrap.appendChild(attentionEl(p));
+    wrap.appendChild(tokenTable(p));
+    if (p.points) wrap.appendChild(scatterEl(p.points));
+  } else if (p.kind === "maps") {
     wrap.className = "maps";
     p.maps.forEach((m, i) => {
       const fig = document.createElement("figure");
@@ -312,6 +340,86 @@ function previewEl(p) {
   return wrap;
 }
 
+const tokenLabel = (i) => (tokens && tokens[i] !== undefined ? tokens[i] : `token ${i}`);
+
+// Un vecteur par token : une ligne de cases, bleue si la valeur est positive, rouge si négative.
+function tokenTable(p) {
+  const max = Math.max(Math.abs(p.min), Math.abs(p.max)) || 1;
+  const table = document.createElement("table");
+  table.className = "token-table";
+  p.rows.forEach((row, i) => {
+    const tr = table.insertRow();
+    tr.insertCell().textContent = tokenLabel(i);
+    row.forEach((v) => {
+      const td = tr.insertCell();
+      td.textContent = v.toFixed(2);
+      td.style.background = `rgba(${v >= 0 ? "91,140,255" : "255,107,107"},${(Math.abs(v) / max * 0.85).toFixed(2)})`;
+    });
+    if (p.dim > row.length) tr.insertCell().textContent = "…";
+  });
+  const box = document.createElement("div");
+  box.className = "token-box";
+  box.appendChild(table);
+  const note = document.createElement("div");
+  note.className = "meta";
+  note.textContent = `${Math.min(p.dim, p.rows[0].length)} premières dimensions sur ${p.dim}` +
+    (p.length > p.rows.length ? ` · ${p.rows.length} premiers tokens sur ${p.length}` : "");
+  box.appendChild(note);
+  return box;
+}
+
+// Une grille par tête d'attention : ligne = token qui regarde, colonne = token regardé.
+function attentionEl(p) {
+  const wrap = document.createElement("div");
+  wrap.className = "attn";
+  p.attention.forEach((head, h) => {
+    const n = head.length;
+    const fig = document.createElement("figure");
+    const grid = document.createElement("div");
+    grid.className = "attn-grid";
+    grid.style.gridTemplateColumns = `auto repeat(${n}, 1fr)`;
+    head.forEach((row, i) => {
+      const label = document.createElement("span");
+      label.textContent = tokenLabel(i);
+      grid.appendChild(label);
+      row.forEach((v, j) => {
+        const cell = document.createElement("i");
+        cell.style.background = `rgb(${heat(v).slice(0, 3).join(",")})`;
+        cell.title = `« ${tokenLabel(i)} » regarde « ${tokenLabel(j)} » : ${(v * 100).toFixed(0)} %`;
+        grid.appendChild(cell);
+      });
+    });
+    fig.appendChild(grid);
+    const cap = document.createElement("figcaption");
+    cap.textContent = `tête ${h}`;
+    fig.appendChild(cap);
+    wrap.appendChild(fig);
+  });
+  if (p.heads > p.attention.length) {
+    const more = document.createElement("span");
+    more.className = "meta";
+    more.textContent = `+ ${p.heads - p.attention.length} autres têtes`;
+    wrap.appendChild(more);
+  }
+  return wrap;
+}
+
+// Les vecteurs des tokens ramenés à 2 dimensions : deux points proches = deux vecteurs proches.
+function scatterEl(points) {
+  const size = 220, pad = 26;
+  const pos = (v) => pad + ((v + 1) / 2) * (size - 2 * pad);
+  const dots = points.map(([x, y], i) => `
+    <circle cx="${pos(x)}" cy="${pos(-y)}" r="4"></circle>
+    <text x="${pos(x) + 7}" y="${pos(-y) + 4}"></text>`).join("");
+  const box = document.createElement("div");
+  box.className = "scatter";
+  box.innerHTML = `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">${dots}</svg>
+    <p class="meta">Les mêmes vecteurs, ramenés de leurs dimensions d'origine à 2 (ACP).
+    Deux points proches = deux vecteurs proches.</p>`;
+  box.querySelectorAll("text").forEach((t, i) => { t.textContent = tokenLabel(i); });
+  return box;
+}
+
 // Échelle de couleur sombre -> bleu -> jaune pour les cartes d'activation.
 function heat(v) {
   const stops = [[15, 17, 23], [40, 70, 160], [90, 160, 255], [255, 220, 90]];
@@ -343,8 +451,9 @@ function renderPrediction(pred) {
 (async function main() {
   const select = $("examples");
   Object.keys(window.NEURO_EXAMPLES).forEach((name) => select.add(new Option(name, name)));
-  select.addEventListener("change", () => { setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
+  select.addEventListener("change", () => { $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
   paintPad(seven());
+  $("text").addEventListener("input", schedule);
   await initEditor(window.NEURO_EXAMPLES[select.value]);
   run();
 })();

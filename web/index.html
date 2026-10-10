@@ -24,10 +24,15 @@
       <div class="card input-card">
         <div class="card-head">
           <span class="tag tag-input">Entrée</span>
-          <span class="shape">1 × 28 × 28</span>
+          <span class="shape" id="input-shape">1 × 28 × 28</span>
         </div>
-        <p class="hint">Dessine un chiffre : le réseau se recalcule à chaque trait.</p>
-        <div class="input-row">
+        <div id="text-input" hidden>
+          <p class="hint">Écris une phrase : chaque mot devient un token, puis un vecteur.</p>
+          <input id="text" type="text" spellcheck="false" aria-label="Phrase d'entrée">
+          <div id="tokens" class="tokens"></div>
+        </div>
+        <p class="hint" id="pad-hint">Dessine un chiffre : le réseau se recalcule à chaque trait.</p>
+        <div class="input-row" id="pad-row">
           <canvas id="pad" width="28" height="28"></canvas>
           <div class="input-actions">
             <button id="clear">Effacer</button>

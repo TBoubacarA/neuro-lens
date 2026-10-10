@@ -18,6 +18,10 @@ MAX_PARAMS = 20_000_000
 MAX_MAPS = 8  # cartes d'activation renvoyées par couche
 MAX_MAP_SIZE = 32  # côté maximal d'une carte renvoyée
 MAX_VECTOR = 64  # valeurs renvoyées pour une sortie à plat
+MAX_TOKENS = 16  # tokens renvoyés pour une séquence
+MAX_DIMS = 8  # dimensions affichées par vecteur de token
+MAX_HEADS = 8  # têtes d'attention renvoyées
+DEFAULT_TEXT = "le chat dort sur le canapé du salon"
 
 
 def default_input() -> torch.Tensor:
@@ -30,11 +34,37 @@ def default_input() -> torch.Tensor:
     return img.view(1, 1, 28, 28)
 
 
+def tokenize(text: str, vocab_size: int) -> tuple[list[str], torch.Tensor]:
+    """Découpe le texte en mots ; un même mot reçoit toujours le même numéro."""
+    words = re.findall(r"\w+|[^\w\s]", text.lower())[:MAX_TOKENS] or ["?"]
+    ids: dict[str, int] = {}
+    for w in words:
+        ids.setdefault(w, len(ids) % vocab_size)
+    return words, torch.tensor([[ids[w] for w in words]], dtype=torch.long)
+
+
+def _is_leaf(m: nn.Module) -> bool:
+    """Une couche qu'on montre telle quelle : sans sous-couches, ou un bloc d'attention."""
+    return isinstance(m, nn.MultiheadAttention) or not list(m.children())
+
+
+def _leaves(model: nn.Module) -> list[tuple[str, nn.Module]]:
+    out: list[tuple[str, nn.Module]] = []
+    for name, m in model.named_modules():
+        if not name or not _is_leaf(m):
+            continue
+        if any(name.startswith(n + ".") and isinstance(p, nn.MultiheadAttention) for n, p in out):
+            continue  # l'intérieur d'un bloc d'attention reste caché
+        out.append((name, m))
+    return out
+
+
 def _layer_params(m: nn.Module) -> dict:
     """Hyperparamètres lisibles d'une couche (kernel, stride, nombre de neurones...)."""
     keys = [
         "in_channels", "out_channels", "kernel_size", "stride", "padding",
         "in_features", "out_features", "p", "num_features", "negative_slope", "dim",
+        "num_embeddings", "embedding_dim", "embed_dim", "num_heads", "normalized_shape",
     ]
     out = {}
     for k in keys:
@@ -65,6 +95,16 @@ def _preview(out: torch.Tensor) -> dict:
         if max(maps.shape[1:]) > MAX_MAP_SIZE:
             maps = nn.functional.adaptive_avg_pool2d(maps, MAX_MAP_SIZE)
         return {"kind": "maps", "maps": [_normalize(m) for m in maps], "channels": x.shape[0], **stats}
+    if x.dim() == 2:  # (tokens, dimensions) : un vecteur par token
+        rows = x[:MAX_TOKENS].float()
+        return {
+            "kind": "tokens",
+            "rows": [[round(v, 3) for v in r] for r in rows[:, :MAX_DIMS].tolist()],
+            "dim": x.shape[1],
+            "length": x.shape[0],
+            "values": [round(v, 4) for v in x.float().abs().mean(dim=0)[:MAX_VECTOR].tolist()],
+            **stats,
+        }
     flat = x.flatten()
     return {
         "kind": "vector",
@@ -72,6 +112,20 @@ def _preview(out: torch.Tensor) -> dict:
         "length": flat.numel(),
         **stats,
     }
+
+
+def _points(x: torch.Tensor) -> list | None:
+    """Projette les vecteurs des tokens sur leurs 2 axes principaux (ACP) pour les placer sur un plan."""
+    rows = x.detach()[0][:MAX_TOKENS].float()
+    if rows.dim() != 2 or rows.shape[0] < 3 or rows.shape[1] < 2:
+        return None
+    centered = rows - rows.mean(dim=0)
+    u, s, _ = torch.linalg.svd(centered, full_matrices=False)
+    pts = u[:, :2] * s[:2]
+    scale = pts.abs().max()
+    if scale > 0:
+        pts = pts / scale
+    return [[round(v, 3) for v in p] for p in pts.tolist()]
 
 
 def _find_lines(code: str, layers: list[dict]) -> None:
@@ -88,7 +142,9 @@ def _find_lines(code: str, layers: list[dict]) -> None:
                 if pat.search(line) and i not in used:
                     found = i
                     break
-        if found is None:  # couches dans nn.Sequential : on suit l'ordre des « Type( »
+        # Couches dans nn.Sequential : on suit l'ordre des « Type( ». Une couche nommée à
+        # l'intérieur d'un bloc tout fait n'a pas de ligne à elle : voir _group_lines.
+        if found is None and (attr.isdigit() or "." not in layer["name"]):
             pat = re.compile(rf"\b{re.escape(layer['type'])}\s*\(")
             for i in range(cursor, len(lines)):
                 if pat.search(lines[i]) and i not in used:
@@ -129,7 +185,25 @@ def _explain(exc: BaseException) -> str:
     return msg
 
 
-def analyze(code: str, pixels: list[list[float]] | None = None) -> dict:
+def _group_lines(code: str, model: nn.Module, layers: list[dict]) -> None:
+    """Une couche créée par un bloc tout fait (TransformerEncoderLayer...) hérite de la ligne du bloc."""
+    modules = dict(model.named_modules())
+    groups: dict[str, dict] = {}
+    for layer in layers:
+        parent = layer["name"].rpartition(".")[0]
+        if not parent:
+            continue
+        layer["group"] = {"name": parent, "type": type(modules[parent]).__name__}
+        if "line" not in layer:
+            groups.setdefault(parent, {"name": parent, "type": type(modules[parent]).__name__})
+    _find_lines(code, list(groups.values()))
+    for layer in layers:
+        line = groups.get(layer["name"].rpartition(".")[0], {}).get("line")
+        if "line" not in layer and line:
+            layer["line"] = line
+
+
+def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None = None) -> dict:
     """Point d'entrée : code Python -> description des couches et de leurs sorties."""
     namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
     try:
@@ -145,7 +219,15 @@ def analyze(code: str, pixels: list[list[float]] | None = None) -> dict:
     if n_params > MAX_PARAMS:
         return {"ok": False, "error": f"Modèle trop gros pour l'aperçu ({n_params:,} paramètres).", "line": None}
 
-    if pixels is not None:
+    leaves = _leaves(model)
+    tokens = None
+    if leaves and isinstance(leaves[0][1], nn.Embedding):  # le modèle lit du texte
+        if not text:
+            text = namespace.get("example_text")
+        if not isinstance(text, str) or not text.strip():
+            text = DEFAULT_TEXT
+        tokens, x = tokenize(text, leaves[0][1].num_embeddings)
+    elif pixels is not None:
         x = torch.tensor(pixels, dtype=torch.float32).view(1, 1, 28, 28)
     else:
         x = namespace.get("example_input")
@@ -157,21 +239,37 @@ def analyze(code: str, pixels: list[list[float]] | None = None) -> dict:
 
     def make_hook(name: str):
         def hook(module, _inp, out):
+            weights = None
+            if isinstance(module, nn.MultiheadAttention):
+                out, weights = out
+                if not module.batch_first:  # (tokens, lot, dimensions) -> (lot, tokens, dimensions)
+                    out = out.transpose(0, 1)
             if not isinstance(out, torch.Tensor):
                 return
+            preview = _preview(out)
+            if weights is not None:  # (lot, têtes, token qui regarde, token regardé)
+                w = weights.detach()[0][:MAX_HEADS, :MAX_TOKENS, :MAX_TOKENS]
+                preview["attention"] = [[[round(v, 3) for v in row] for row in h] for h in w.tolist()]
+                preview["heads"] = weights.shape[1]
+            if isinstance(module, nn.Embedding):
+                preview["points"] = _points(out)
             layers.append({
                 "name": name,
                 "type": type(module).__name__,
                 "params": _layer_params(module),
-                "n_params": sum(p.numel() for p in module.parameters(recurse=False)),
+                "n_params": sum(p.numel() for p in module.parameters()),
                 "shape": list(out.shape),
-                "preview": _preview(out),
+                "preview": preview,
             })
         return hook
 
-    for name, module in model.named_modules():
-        if name and not list(module.children()):
-            hooks.append(module.register_forward_hook(make_hook(name)))
+    def want_weights(_module, args, kwargs):
+        return args, {**kwargs, "need_weights": True, "average_attn_weights": False}
+
+    for name, module in leaves:
+        if isinstance(module, nn.MultiheadAttention):
+            hooks.append(module.register_forward_pre_hook(want_weights, with_kwargs=True))
+        hooks.append(module.register_forward_hook(make_hook(name)))
 
     model.eval()
     try:
@@ -180,24 +278,32 @@ def analyze(code: str, pixels: list[list[float]] | None = None) -> dict:
     except Exception as exc:  # noqa: BLE001
         line = _error_line(exc)
         if line is None:  # l'erreur vient de PyTorch : on désigne la première couche qui n'a pas abouti
-            leaves = [
-                {"name": n, "type": type(m).__name__}
-                for n, m in model.named_modules()
-                if n and not list(m.children())
-            ]
-            _find_lines(code, leaves)
-            if len(layers) < len(leaves):
-                line = leaves[len(layers)].get("line")
+            pending = [{"name": n, "type": type(m).__name__} for n, m in leaves]
+            _find_lines(code, pending)
+            _group_lines(code, model, pending)
+            if len(layers) < len(pending):
+                line = pending[len(layers)].get("line")
         _find_lines(code, layers)
+        _group_lines(code, model, layers)
         return {"ok": False, "error": _explain(exc), "line": line, "layers": layers}
     finally:
         for h in hooks:
             h.remove()
 
     _find_lines(code, layers)
+    _group_lines(code, model, layers)
+    if tokens is None:
+        described = {"shape": list(x.shape), "preview": _preview(x)}
+    else:
+        described = {
+            "shape": list(x.shape),
+            "preview": {"kind": "text", "ids": x[0].tolist()},
+            "tokens": tokens,
+            "text": text,
+        }
     result = {
         "ok": True,
-        "input": {"shape": list(x.shape), "preview": _preview(x)},
+        "input": described,
         "layers": layers,
         "n_params": n_params,
     }

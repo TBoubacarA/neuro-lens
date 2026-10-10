@@ -87,3 +87,44 @@ def test_api_and_timeout(monkeypatch):
         assert not r.json()["ok"] and "boucle" in r.json()["error"]
         r = client.post("/api/analyze", json={"code": CNN})  # le processus a redémarré
         assert r.json()["ok"]
+
+
+TRANSFORMER = """import torch.nn as nn
+
+class MiniTransformer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embed = nn.Embedding(100, 16)
+        self.block = nn.TransformerEncoderLayer(16, nhead=4, dim_feedforward=32, batch_first=True)
+        self.head = nn.Linear(16, 3)
+
+    def forward(self, ids):
+        x = self.block(self.embed(ids))
+        return self.head(x.mean(dim=1))
+
+model = MiniTransformer()
+"""
+
+
+def test_text_model_shows_embeddings_and_attention():
+    res = analyze(TRANSFORMER, text="le chat et le chien")
+    assert res["ok"]
+    assert res["input"]["tokens"] == ["le", "chat", "et", "le", "chien"]
+    ids = res["input"]["preview"]["ids"]
+    assert ids[0] == ids[3]  # même mot, même numéro
+
+    embed = res["layers"][0]
+    assert (embed["type"], embed["shape"], embed["line"]) == ("Embedding", [1, 5, 16], 6)
+    assert embed["preview"]["kind"] == "tokens"
+    assert embed["preview"]["rows"][0] == embed["preview"]["rows"][3]
+    assert len(embed["preview"]["points"]) == 5
+
+    attn = next(l for l in res["layers"] if l["type"] == "MultiheadAttention")
+    assert attn["line"] == 7 and attn["group"]["type"] == "TransformerEncoderLayer"
+    heads = attn["preview"]["attention"]
+    assert len(heads) == 4 and len(heads[0]) == 5
+    assert abs(sum(heads[0][0]) - 1) < 0.01  # chaque token répartit 100 % de son attention
+    assert not any(l["name"].startswith("block.self_attn.") for l in res["layers"])
+    assert len(res["prediction"]["probs"]) == 3
+    lines = {l["name"]: l.get("line") for l in res["layers"]}
+    assert lines["block.linear1"] == 7 and lines["head"] == 8  # le bloc ne vole pas la ligne de `head`

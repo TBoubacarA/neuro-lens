@@ -179,3 +179,38 @@ main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
 .graph-col.active .graph-node { stroke: var(--accent); }
 .graph-svg.has-focus .graph-edges line { opacity: .08; }
 .graph-svg.has-focus .graph-edges line.focus { opacity: .9; stroke: var(--accent); }
+
+.card[data-family="embed"] { border-left-color: #ff9a85; }
+.card[data-family="attn"] { border-left-color: var(--act); }
+#text {
+  width: 100%; padding: 7px 10px; border-radius: 6px; font: inherit;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+}
+#text:focus { outline: none; border-color: var(--accent); }
+.tokens { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.tokens span {
+  display: flex; flex-direction: column; align-items: center; padding: 3px 8px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+}
+.tokens i { font-style: normal; font-size: 10px; color: var(--muted); }
+
+.token-box { overflow-x: auto; }
+.token-table { border-collapse: separate; border-spacing: 2px; font: 11px ui-monospace, Menlo, monospace; }
+.token-table td { padding: 3px 6px; border-radius: 3px; text-align: right; white-space: nowrap; }
+.token-table td:first-child { color: var(--text); font-weight: 700; padding-right: 10px; }
+
+.attn { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+.attn figure { margin: 0; text-align: center; }
+.attn figcaption { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.attn-grid { display: grid; gap: 1px; align-items: center; }
+.attn-grid span { font-size: 10px; color: var(--muted); padding-right: 6px; text-align: right; }
+.attn-grid i { display: block; width: 15px; height: 15px; border-radius: 2px; }
+
+.scatter { margin-top: 10px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.scatter svg { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; flex: none; }
+.scatter circle { fill: #ff9a85; }
+.scatter text { fill: var(--text); font-size: 11px; }
+.scatter p { flex: 1; min-width: 140px; margin: 0; }
+.graph-col[data-family="embed"] .graph-node { fill: #ff9a85; stroke: #ff9a85; }
+.graph-col[data-family="attn"] .graph-node { fill: var(--act); stroke: var(--act); }
+[hidden] { display: none !important; }

@@ -14,13 +14,15 @@ const INLINE = new Set([
   "ReLU", "LeakyReLU", "Sigmoid", "Tanh", "GELU", "Softmax", "Dropout", "BatchNorm1d", "BatchNorm2d",
 ]);
 
-// Nombre d'unités d'une sortie : les canaux pour des cartes, les valeurs pour un vecteur.
-function unitCount(shape) {
-  return shape.length > 2 ? shape[1] : shape[shape.length - 1];
+// Nombre d'unités d'une sortie : les canaux pour des cartes, les tokens pour un texte,
+// les valeurs (ou les dimensions du vecteur de chaque token) sinon.
+function unitCount(shape, preview) {
+  return preview.kind === "maps" || preview.kind === "text" ? shape[1] : shape[shape.length - 1];
 }
 
 // Une valeur d'activité entre 0 et 1 par unité, quand le serveur l'a renvoyée.
 function unitValues(preview) {
+  if (preview.kind === "text") return preview.ids.map(() => 1);
   if (preview.kind === "maps") {
     return preview.maps.map((m) => {
       const flat = m.flat();
@@ -34,11 +36,11 @@ function unitValues(preview) {
 function columnsFromLayers(input, layers, prediction) {
   const cols = [{
     label: "Entrée", sub: input.shape.slice(1).join("×"), family: "input",
-    count: unitCount(input.shape), values: unitValues(input.preview), link: null, line: null,
+    count: unitCount(input.shape, input.preview), values: unitValues(input.preview), link: null, line: null,
   }];
   layers.forEach((l) => {
     const prev = cols[cols.length - 1];
-    const count = unitCount(l.shape);
+    const count = unitCount(l.shape, l.preview);
     if (INLINE.has(l.type) && cols.length > 1 && count === prev.count) {
       prev.sub = `${prev.sub} → ${l.type}`;
       prev.values = unitValues(l.preview);

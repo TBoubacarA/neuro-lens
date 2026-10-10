@@ -1,5 +1,6 @@
 // Modèles d'exemple proposés dans le menu de la page.
 window.NEURO_EXAMPLES = {
+
   "CNN simple (MNIST)": `import torch.nn as nn
 
 # Une image 28x28 en niveaux de gris entre à gauche...
@@ -68,5 +69,31 @@ model = nn.Sequential(
     nn.Flatten(),
     nn.Linear(8 * 14 * 14, 10),
 )
+`,
+
+  "Mini-Transformer (texte)": `import torch
+import torch.nn as nn
+
+# Le modèle lit une phrase : écris-la dans la carte « Entrée », à droite.
+example_text = "le chat dort sur le canapé du salon"
+
+
+class MiniTransformer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embed = nn.Embedding(1000, 32)       # un vecteur de 32 nombres par mot
+        self.position = nn.Embedding(64, 32)      # un vecteur par position dans la phrase
+        self.block = nn.TransformerEncoderLayer(  # attention, puis petit réseau dense
+            d_model=32, nhead=4, dim_feedforward=64, batch_first=True)
+        self.head = nn.Linear(32, 3)              # 3 classes en sortie
+
+    def forward(self, ids):
+        where = torch.arange(ids.shape[1]).unsqueeze(0)
+        x = self.embed(ids) + self.position(where)
+        x = self.block(x)
+        return self.head(x.mean(dim=1))           # moyenne des tokens -> une réponse
+
+
+model = MiniTransformer()
 `,
 };

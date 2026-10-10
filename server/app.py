@@ -24,9 +24,9 @@ def _worker_loop(conn) -> None:
 
     conn.send("ready")  # importer PyTorch peut prendre plusieurs secondes : hors du délai
     while True:
-        code, pixels = conn.recv()
+        code, pixels, text = conn.recv()
         try:
-            conn.send(analyze(code, pixels))
+            conn.send(analyze(code, pixels, text))
         except Exception as exc:  # noqa: BLE001
             conn.send({"ok": False, "error": str(exc), "line": None})
 
@@ -45,14 +45,14 @@ class Worker:
         self._proc.start()
         self._ready = False
 
-    def run(self, code: str, pixels) -> dict:
+    def run(self, code: str, pixels, text=None) -> dict:
         with self._lock:
             if not self._proc.is_alive():
                 self._start()
             if not self._ready:
                 self._conn.recv()
                 self._ready = True
-            self._conn.send((code, pixels))
+            self._conn.send((code, pixels, text))
             if self._conn.poll(TIMEOUT_S):
                 return self._conn.recv()
             self._proc.kill()
@@ -64,6 +64,7 @@ class Worker:
 class AnalyzeRequest(BaseModel):
     code: str
     pixels: list[list[float]] | None = None
+    text: str | None = None
 
 
 worker: Worker | None = None
@@ -81,7 +82,7 @@ app = FastAPI(title="neuro-lens", lifespan=lifespan)
 
 @app.post("/api/analyze")
 def analyze_endpoint(req: AnalyzeRequest) -> dict:
-    return worker.run(req.code, req.pixels)
+    return worker.run(req.code, req.pixels, req.text)
 
 
 @app.get("/")
