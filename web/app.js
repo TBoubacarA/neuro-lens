@@ -186,14 +186,16 @@ function setStatus(text, cls) {
   s.className = `status ${cls}`;
 }
 
-async function run() {
+// live = true : le code a le droit d'appeler un vrai modèle de langage (payant), seulement sur clic.
+async function run(live = false) {
   const id = ++requestId;
+  if (live) setStatus("Claude réfléchit…", "");
   let res;
   try {
     const r = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: getCode(), pixels, text: $("text").value || null }),
+      body: JSON.stringify({ code: getCode(), pixels, text: $("text").value || null, live }),
     });
     res = await r.json();
   } catch (e) {
@@ -215,7 +217,7 @@ function renderOther(res) {
     renderML($("layers"), res, highlightLine, revealLine);
   } else {
     setStatus(`agent · ${res.steps.length} passage${res.steps.length > 1 ? "s" : ""}`, res.stopped ? "err" : "ok");
-    renderAgent($("layers"), res, highlightLine, revealLine);
+    renderAgent($("layers"), res, highlightLine, revealLine, () => run(true));
   }
 }
 

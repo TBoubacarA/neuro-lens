@@ -3,7 +3,7 @@
 const AGENT = { w: 132, h: 34, gapX: 22, gapY: 44, pad: 20, lane: 14 };
 const stepName = (id) => (id === "__start__" ? "Départ" : id === "__end__" ? "Fin" : id);
 
-function renderAgent(root, res, onHover, onPick) {
+function renderAgent(root, res, onHover, onPick, onLive) {
   root.innerHTML = "";
   const a = AGENT;
   const card = mlCard("attn", "Agent", `${res.nodes.filter((n) => n.kind === "step").length} étapes`);
@@ -95,6 +95,25 @@ function renderAgent(root, res, onHover, onPick) {
   box.appendChild(svg);
   card.appendChild(box);
   if (res.hint) addText(card, "meta", res.hint);
+  if (res.llm) {
+    const bar = document.createElement("div");
+    bar.className = "llm-bar";
+    const go = document.createElement("button");
+    go.className = "small";
+    go.textContent = "▶ Lancer avec Claude";
+    go.disabled = !res.llm.key;
+    go.addEventListener("click", () => { go.disabled = true; onLive(); });
+    bar.appendChild(go);
+    const note = document.createElement("span");
+    note.className = "meta";
+    note.textContent = !res.llm.key
+      ? "Pour que Claude pilote l'agent, lance le serveur avec ta clé : ANTHROPIC_API_KEY=… python -m server.app. Sans clé, une règle fixe joue son rôle."
+      : res.llm.live
+        ? "Déroulé réel : chaque passage par « reflechir » est un appel à Claude, qui a choisi lui-même ses outils."
+        : "Déroulé ci-dessous : la règle fixe. Clique pour que Claude décide lui-même (un appel payant par passage).";
+    bar.appendChild(note);
+    card.appendChild(bar);
+  }
   root.appendChild(card);
   if (!res.start) return;
 

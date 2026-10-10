@@ -264,3 +264,54 @@ def test_training_improves_and_is_reused_by_analysis():
     trainer.reset(code)
     assert analyze(code)["training"] is None
     assert not train(TRANSFORMER)["ok"]  # texte : pas d'entraînement sur les chiffres
+
+
+def _example(name):
+    import json
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).parent.parent / "web" / "examples.js").read_text()
+    start = src.index(json.dumps(name) + ": `") + len(name) + 5
+    return re.sub(r"\\`", "`", src[start : src.index("`,", start)])
+
+
+def test_claude_agent_without_key_uses_the_rule(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    res = analyze(_example("Agent IA avec Claude (LangGraph)"))
+    assert res["ok"] and res["llm"] == {"key": False, "live": False}
+    assert [s["node"] for s in res["steps"]] == ["reflechir", "chercher", "reflechir", "calculer", "reflechir", "repondre"]
+    assert res["final"]["reponse"] == "La tour Eiffel mesure 33 000 cm."
+
+
+def test_claude_agent_live_follows_the_model(monkeypatch):
+    """Un faux client Claude : vérifie qu'on suit ses appels d'outils et qu'on lui rend les résultats."""
+    import types
+
+    import anthropic
+
+    calls = []
+
+    def block(**kw):
+        return types.SimpleNamespace(**kw)
+
+    def create(**kw):
+        calls.append(kw)
+        script = [
+            [block(type="tool_use", id="t1", name="chercher", input={"sujet": "Tour Eiffel"})],
+            [block(type="tool_use", id="t2", name="calculer", input={"operation": "330 * 100"})],
+            [block(type="text", text="Elle mesure 33 000 cm.")],
+        ]
+        return types.SimpleNamespace(content=script[len(calls) - 1], stop_reason="end_turn")
+
+    fake = types.SimpleNamespace(beta=types.SimpleNamespace(messages=types.SimpleNamespace(create=create)))
+    monkeypatch.setattr(anthropic, "Anthropic", lambda: fake)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    monkeypatch.setenv("NEURO_LENS_LIVE", "1")
+    res = analyze(_example("Agent IA avec Claude (LangGraph)"))
+    assert res["ok"] and res["llm"] == {"key": True, "live": True}
+    assert [s["node"] for s in res["steps"]] == ["reflechir", "chercher", "reflechir", "calculer", "reflechir", "repondre"]
+    assert res["final"]["reponse"] == "Elle mesure 33 000 cm."
+    assert calls[0]["model"] == "claude-opus-5-5" and calls[0]["fallbacks"] == "default"
+    results = [m["content"][0] for m in calls[2]["messages"] if m["role"] == "user" and isinstance(m["content"], list)]
+    assert [(r["tool_use_id"], r["content"]) for r in results] == [("t1", "La tour Eiffel mesure 330 m."), ("t2", "33000")]

@@ -40,7 +40,15 @@ Le modèle est entraîné sur `X`, `y` s'il ne l'est pas déjà. Le score affich
 
 ### Agents LangGraph
 
-L'agent est exécuté pour de bon à partir de `state`. L'exemple fourni remplace le modèle de langage par une fonction simple, pour tourner sans clé d'API.
+L'agent est exécuté pour de bon à partir de `state`. Le premier exemple remplace le modèle de langage par une fonction simple, pour tourner sans clé d'API.
+
+L'exemple « Agent IA avec Claude » est piloté par un vrai modèle : Claude choisit lui-même ses outils (recherche, calculatrice) et on voit chaque appel dans le déroulé. Lance le serveur avec ta clé, puis clique sur « Lancer avec Claude » :
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... python -m server.app
+```
+
+Le modèle n'est appelé que sur ce clic (jamais pendant la frappe), car chaque passage est payant. Sans clé, une règle fixe joue son rôle.
 
 ## Lancer
 
@@ -66,7 +74,7 @@ pytest
 ```
 web/        page HTML/JS : éditeur, vues et cartes
 server/
-  app.py       serveur FastAPI ; exécute le code dans un processus séparé (limite de 10 s)
+  app.py       serveur FastAPI ; exécute le code dans un processus séparé (limite de 10 s, 120 s pour un agent piloté par Claude)
   analyzer.py  réseaux PyTorch : capture la sortie de chaque couche et le trajet des données
   ml.py        modèles scikit-learn
   agents.py    agents LangGraph
@@ -79,5 +87,4 @@ Le serveur exécute le code tapé dans l'éditeur : il est fait pour tourner sur
 
 - Afficher aussi les opérations fonctionnelles (`F.relu`) appelées dans `forward`.
 - Un vrai tokenizer et des embeddings pré-entraînés, pour que les mots proches se rapprochent.
-- Brancher un vrai modèle de langage dans l'exemple d'agent.
 - Volet MLOps : suivi des expériences avec MLflow.

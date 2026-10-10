@@ -262,4 +262,105 @@ graph.add_edge("repondre", END)
 state = {"question": "Combien de centimètres mesure la tour Eiffel ?",
          "notes": [], "action": "", "reponse": ""}
 `,
+
+  "Agent IA avec Claude (LangGraph)": `import ast
+import operator
+import os
+from typing import TypedDict
+from langgraph.graph import StateGraph, START, END
+
+# Même boucle qu'avant, mais le « cerveau » est un vrai modèle de langage (Claude) qui choisit
+# lui-même ses outils. neuro-lens met NEURO_LENS_LIVE=1 seulement quand tu cliques sur
+# « Lancer avec Claude » : on ne paie pas un appel à chaque touche tapée.
+VRAI_MODELE = os.environ.get("NEURO_LENS_LIVE") == "1" and bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+OUTILS = [
+    {"name": "chercher", "description": "Cherche un fait dans une petite encyclopédie.",
+     "input_schema": {"type": "object", "properties": {"sujet": {"type": "string"}}, "required": ["sujet"]}},
+    {"name": "calculer", "description": "Calcule une opération simple, par exemple 330 * 100.",
+     "input_schema": {"type": "object", "properties": {"operation": {"type": "string"}}, "required": ["operation"]}},
+]
+ENCYCLOPEDIE = {"tour eiffel": "La tour Eiffel mesure 330 m.", "everest": "L'Everest culmine à 8 849 m."}
+
+
+class Etat(TypedDict):
+    question: str
+    messages: list   # la conversation avec le modèle : questions, appels d'outils, résultats
+    outil: dict      # l'outil que le modèle veut utiliser maintenant
+    action: str
+    reponse: str
+
+
+def reflechir(etat):
+    if not VRAI_MODELE:   # sans clé : une règle fixe joue le rôle du modèle
+        vus = len(etat["messages"]) // 2
+        plan = [("chercher", {"sujet": "tour eiffel"}), ("calculer", {"operation": "330 * 100"})]
+        if vus < len(plan):
+            nom, entree = plan[vus]
+            return {"action": nom, "outil": {"id": str(vus), "input": entree},
+                    "messages": etat["messages"] + [{"role": "assistant", "content": f"j'utilise {nom}"}]}
+        return {"action": "repondre", "reponse": "La tour Eiffel mesure 33 000 cm."}
+
+    import anthropic
+    reponse = anthropic.Anthropic().beta.messages.create(
+        model="claude-opus-5-5", max_tokens=4000, output_config={"effort": "low"},
+        betas=["server-side-fallback-2026-07-01"], fallbacks="default",   # un autre modèle prend le relais en cas de refus
+        system="Réponds en français, en une phrase. Utilise les outils plutôt que ta mémoire.",
+        tools=OUTILS, messages=etat["messages"] or [{"role": "user", "content": etat["question"]}],
+    )
+    messages = (etat["messages"] or [{"role": "user", "content": etat["question"]}]) + [
+        {"role": "assistant", "content": reponse.content}]
+    appel = next((b for b in reponse.content if b.type == "tool_use"), None)
+    if appel:
+        return {"action": appel.name, "outil": {"id": appel.id, "input": appel.input}, "messages": messages}
+    texte = "".join(b.text for b in reponse.content if b.type == "text")
+    return {"action": "repondre", "reponse": texte or f"(arrêt : {reponse.stop_reason})", "messages": messages}
+
+
+def resultat(etat, texte):   # on rend le résultat de l'outil au modèle
+    bloc = {"type": "tool_result", "tool_use_id": etat["outil"]["id"], "content": texte}
+    return {"messages": etat["messages"] + [{"role": "user", "content": [bloc] if VRAI_MODELE else texte}]}
+
+
+def chercher(etat):   # outil 1
+    sujet = etat["outil"]["input"]["sujet"].lower()
+    return resultat(etat, next((v for k, v in ENCYCLOPEDIE.items() if k in sujet), "Rien trouvé."))
+
+
+def calculer(etat):   # outil 2 : une calculatrice qui n'accepte que + - * /
+    ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
+
+    def valeur(n):
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return n.value
+        if isinstance(n, ast.BinOp) and type(n.op) in ops:
+            return ops[type(n.op)](valeur(n.left), valeur(n.right))
+        raise ValueError("opération non autorisée")
+
+    try:
+        texte = str(valeur(ast.parse(etat["outil"]["input"]["operation"], mode="eval").body))
+    except (SyntaxError, ValueError) as err:
+        texte = f"Erreur : {err}"
+    return resultat(etat, texte)
+
+
+def repondre(etat):
+    return {}
+
+
+graph = StateGraph(Etat)
+graph.add_node("reflechir", reflechir)
+graph.add_node("chercher", chercher)
+graph.add_node("calculer", calculer)
+graph.add_node("repondre", repondre)
+graph.add_edge(START, "reflechir")
+graph.add_conditional_edges("reflechir", lambda etat: etat["action"],
+                            {"chercher": "chercher", "calculer": "calculer", "repondre": "repondre"})
+graph.add_edge("chercher", "reflechir")
+graph.add_edge("calculer", "reflechir")
+graph.add_edge("repondre", END)
+
+state = {"question": "Combien de centimètres mesure la tour Eiffel ?",
+         "messages": [], "outil": {}, "action": "", "reponse": ""}
+`,
 };

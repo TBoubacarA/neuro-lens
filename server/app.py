@@ -6,6 +6,7 @@ Lancement : python -m server.app   puis ouvrir http://127.0.0.1:8000
 from __future__ import annotations
 
 import multiprocessing as mp
+import os
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,6 +18,7 @@ from pydantic import BaseModel
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 TIMEOUT_S = 10
+LIVE_TIMEOUT_S = 120  # un agent piloté par un vrai modèle de langage attend ses réponses
 
 
 def _worker_loop(conn) -> None:
@@ -30,6 +32,12 @@ def _worker_loop(conn) -> None:
         try:
             if op == "train":
                 conn.send(train(code))
+            elif op == "live":  # le code peut appeler un vrai modèle de langage (voir l'exemple agent)
+                os.environ["NEURO_LENS_LIVE"] = "1"
+                try:
+                    conn.send(analyze(code, pixels, text))
+                finally:
+                    os.environ.pop("NEURO_LENS_LIVE", None)
             elif op == "reset":
                 trainer.reset(code)
                 conn.send({"ok": True})
@@ -61,18 +69,20 @@ class Worker:
                 self._conn.recv()
                 self._ready = True
             self._conn.send((op, code, pixels, text))
-            if self._conn.poll(TIMEOUT_S):
+            limit = LIVE_TIMEOUT_S if op == "live" else TIMEOUT_S
+            if self._conn.poll(limit):
                 return self._conn.recv()
             self._proc.kill()
             self._proc.join()
             self._start()
-            return {"ok": False, "error": f"Le code a mis plus de {TIMEOUT_S} s : boucle infinie ?", "line": None}
+            return {"ok": False, "error": f"Le code a mis plus de {limit} s : boucle infinie ?", "line": None}
 
 
 class AnalyzeRequest(BaseModel):
     code: str
     pixels: list[list[float]] | None = None
     text: str | None = None
+    live: bool = False  # True : le code a le droit d'appeler un vrai modèle (payant)
 
 
 worker: Worker | None = None
@@ -90,7 +100,7 @@ app = FastAPI(title="neuro-lens", lifespan=lifespan)
 
 @app.post("/api/analyze")
 def analyze_endpoint(req: AnalyzeRequest) -> dict:
-    return worker.run(req.code, req.pixels, req.text)
+    return worker.run(req.code, req.pixels, req.text, op="live" if req.live else "analyze")
 
 
 class CodeRequest(BaseModel):

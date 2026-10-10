@@ -6,6 +6,7 @@ Le code de l'éditeur définit `graph` (un StateGraph, compilé ou non). S'il d�
 
 from __future__ import annotations
 
+import os
 import re
 
 MAX_STEPS = 40
@@ -19,6 +20,13 @@ def is_langgraph(obj) -> bool:
 def _short(value) -> str:
     text = value if isinstance(value, str) else repr(value)
     return text if len(text) <= MAX_TEXT else text[: MAX_TEXT - 1] + "…"
+
+
+def _added(before, after) -> str:
+    """Une liste qui s'allonge (notes, messages) : on ne montre que ce qui vient d'être ajouté."""
+    if isinstance(before, list) and isinstance(after, list) and before and after[: len(before)] == before:
+        return _short("+ " + ", ".join(_short(x) for x in after[len(before):]))
+    return _short(after)
 
 
 def _node_line(code: str, name: str) -> int | None:
@@ -45,6 +53,8 @@ def describe(graph, namespace: dict, code: str) -> dict:
         for e in drawn.edges
     ]
     result: dict = {"ok": True, "kind": "agent", "nodes": nodes, "edges": edges, "steps": []}
+    if "NEURO_LENS_LIVE" in code:  # le code sait utiliser un vrai modèle quand on clique sur « Lancer »
+        result["llm"] = {"key": bool(os.environ.get("ANTHROPIC_API_KEY")), "live": os.environ.get("NEURO_LENS_LIVE") == "1"}
 
     state = namespace.get("state")
     if not isinstance(state, dict):
@@ -57,8 +67,9 @@ def describe(graph, namespace: dict, code: str) -> dict:
         for chunk in graph.stream(state, stream_mode="updates", config={"recursion_limit": MAX_STEPS}):
             for name, update in chunk.items():
                 changes = update if isinstance(update, dict) else {}
+                shown = {k: _added(current.get(k), v) for k, v in changes.items()}
                 current.update(changes)
-                result["steps"].append({"node": name, "changes": {k: _short(v) for k, v in changes.items()}})
+                result["steps"].append({"node": name, "changes": shown})
     except Exception as exc:  # noqa: BLE001 - on montre le déroulé jusqu'à l'erreur
         too_long = type(exc).__name__ == "GraphRecursionError"
         result["stopped"] = (

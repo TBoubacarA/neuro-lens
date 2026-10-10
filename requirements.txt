@@ -4,3 +4,4 @@ fastapi>=0.110
 uvicorn>=0.29
 scikit-learn>=1.4
 langgraph>=1.0
+anthropic>=1.13
