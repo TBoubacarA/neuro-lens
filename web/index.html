@@ -35,6 +35,14 @@
           </div>
         </div>
       </div>
+      <div class="card graph-card" id="graph-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Vue réseau</span>
+          <span class="shape" id="graph-shape"></span>
+        </div>
+        <p class="hint">Chaque rond est un neurone (ou un canal), chaque flèche une connexion. Plus un rond est lumineux, plus il est actif. Survole une colonne pour retrouver sa ligne de code.</p>
+        <div id="graph" class="graph"></div>
+      </div>
       <div id="layers"></div>
       <div id="prediction"></div>
     </section>
@@ -42,6 +50,7 @@
 
   <script src="/static/examples.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script src="/static/graph.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

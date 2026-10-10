@@ -156,3 +156,26 @@ main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
   .code-pane { border-right: 0; border-bottom: 1px solid var(--border); }
 }
 .nl-line { background: #7aa2ff26; }
+
+.graph-card { border-left-color: var(--accent); }
+.graph { overflow-x: auto; padding-bottom: 4px; }
+.graph-svg { display: block; margin: 0 auto; }
+.graph-edges line { stroke: var(--muted); stroke-width: 1; opacity: .45; transition: opacity .15s; }
+.graph-arrow { fill: var(--muted); }
+.graph-col { cursor: pointer; }
+.graph-node { fill: var(--other); stroke: var(--other); stroke-width: 1.5; }
+.graph-col[data-family="input"] .graph-node { fill: #ff9a85; stroke: #ff9a85; }
+.graph-col[data-family="conv"] .graph-node { fill: var(--conv); stroke: var(--conv); }
+.graph-col[data-family="pool"] .graph-node { fill: var(--pool); stroke: var(--pool); }
+.graph-col[data-family="dense"] .graph-node { fill: var(--ok); stroke: var(--ok); }
+.graph-col[data-family="output"] .graph-node { fill: #4db8ff; stroke: #4db8ff; }
+.graph-node.top { stroke: #fff; stroke-width: 2.5; }
+.graph-label, .graph-sub, .graph-idx, .graph-dots { text-anchor: middle; fill: var(--text); font-size: 11px; }
+.graph-label { font-weight: 700; }
+.graph-sub { fill: var(--muted); font-size: 10px; }
+.graph-idx { font-size: 10px; font-weight: 700; pointer-events: none; }
+.graph-dots { fill: var(--muted); font-size: 16px; }
+.graph-col.active .graph-label { fill: var(--accent); }
+.graph-col.active .graph-node { stroke: var(--accent); }
+.graph-svg.has-focus .graph-edges line { opacity: .08; }
+.graph-svg.has-focus .graph-edges line.focus { opacity: .9; stroke: var(--accent); }

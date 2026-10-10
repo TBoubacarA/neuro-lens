@@ -106,6 +106,9 @@ function focusLine(line) {
     c.classList.toggle("active", on);
     if (on && !match) match = c;
   });
+  document.querySelectorAll("#graph .graph-col").forEach((g) => {
+    g.classList.toggle("active", Number(g.dataset.line) === line);
+  });
   if (match) match.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
@@ -200,6 +203,7 @@ function render(res) {
     setStatus(`${res.layers.length} couches · ${fmtN(res.n_params)} paramètres`, "ok");
     lastLayers = res.layers;
     renderLayers(res.layers, null);
+    renderNetwork(res);
     renderPrediction(res.prediction);
   } else {
     err.hidden = false;
@@ -211,6 +215,20 @@ function render(res) {
     renderLayers(partial, res.layers ? res : null);
     $("prediction").innerHTML = "";
   }
+}
+
+function renderNetwork(res) {
+  const cols = columnsFromLayers(res.input, res.layers, res.prediction);
+  $("graph-card").hidden = false;
+  $("graph-shape").textContent = `${cols.length} colonnes`;
+  renderGraph($("graph"), cols, highlightLine, revealLine);
+}
+
+function revealLine(line) {
+  if (!line || !monacoRef) return;
+  editor.revealLineInCenter(line);
+  editor.setPosition({ lineNumber: line, column: 1 });
+  editor.focus();
 }
 
 function renderLayers(layers, failure) {
@@ -250,12 +268,7 @@ function layerCard(l) {
   c.appendChild(meta);
   c.addEventListener("mouseenter", () => highlightLine(l.line));
   c.addEventListener("mouseleave", () => highlightLine(null));
-  c.addEventListener("click", () => {
-    if (!l.line || !monacoRef) return;
-    editor.revealLineInCenter(l.line);
-    editor.setPosition({ lineNumber: l.line, column: 1 });
-    editor.focus();
-  });
+  c.addEventListener("click", () => revealLine(l.line));
   return c;
 }
 
