@@ -194,6 +194,13 @@ async function run() {
 
 function render(res) {
   const err = $("error");
+  if (window.NeuroViews && NeuroViews.handle(res)) { // ML classique ou agent : vue dédiée
+    err.hidden = res.ok;
+    err.textContent = res.ok ? "" : (res.line ? `Ligne ${res.line} : ` : "") + res.error;
+    setErrorMarker(res.ok ? null : res.line, res.error);
+    setStatus(res.ok ? (res.kind === "agent" ? `agent · ${res.trace.length} étapes` : `${res.estimator} · ${res.task}`) : "erreur", res.ok ? "ok" : "err");
+    return;
+  }
   if (res.ok) {
     err.hidden = true;
     setErrorMarker(null);
