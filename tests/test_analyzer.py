@@ -118,6 +118,7 @@ def test_text_model_shows_embeddings_and_attention():
     assert embed["preview"]["kind"] == "tokens"
     assert embed["preview"]["rows"][0] == embed["preview"]["rows"][3]
     assert len(embed["preview"]["points"]) == 5
+    assert len(embed["preview"]["wide"]) == 5 and len(embed["preview"]["wide"][0]) == 16  # vue 3D
 
     attn = next(l for l in res["layers"] if l["type"] == "MultiheadAttention")
     assert attn["line"] == 7 and attn["group"]["type"] == "TransformerEncoderLayer"

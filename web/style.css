@@ -301,3 +301,6 @@ button.small { padding: 2px 8px; font-size: 12px; }
 
 .llm-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .llm-bar .meta { flex: 1 1 240px; }
+
+.depth { display: block; width: 100%; height: 380px; cursor: grab; touch-action: none; }
+.depth:active { cursor: grabbing; }

@@ -210,7 +210,7 @@ function renderOther(res) {
   lastLayers = [];
   lastShape = "";
   tokens = null;
-  ["input-card", "graph-card", "blocks-card", "train-card"].forEach((id) => { $(id).hidden = true; });
+  ["input-card", "graph-card", "blocks-card", "depth-card", "train-card"].forEach((id) => { $(id).hidden = true; });
   $("prediction").innerHTML = "";
   if (res.kind === "ml") {
     setStatus(`${res.estimator} · ${res.n_samples} exemples`, "ok");
@@ -285,6 +285,7 @@ function renderNetwork(res, build) {
   $("blocks-card").hidden = false;
   const skips = renderBlocks($("blocks"), res, highlightLine, revealLine);
   $("blocks-shape").textContent = skips ? `${skips} raccourci${skips > 1 ? "s" : ""}` : "en ligne droite";
+  renderDepth(res, highlightLine, revealLine, build);
 }
 
 function revealLine(line) {

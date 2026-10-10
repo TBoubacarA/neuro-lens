@@ -23,6 +23,7 @@ Ce que la page montre dépend de ce que le code définit :
 - **Entrée** : une zone de dessin (un chiffre 28×28), ou une phrase si le modèle commence par `nn.Embedding`.
 - **Vue réseau** : des neurones en colonnes reliés par des flèches, plus lumineux quand ils sont actifs.
 - **Vue blocs** : le trajet réel des données, avec les raccourcis (connexions résiduelles) et les branches parallèles.
+- **Vue 3D** (modèles de texte et ViT) : la sortie de chaque couche est une plaque, une ligne par mot ; les plaques s'empilent comme les couches de BERT et on les fait tourner à la souris.
 - **Une carte par couche**, avec une phrase d'explication, la forme de la sortie et le nombre de paramètres :
   - cartes d'activation des convolutions et du MaxPool, valeurs des couches denses ;
   - découpage de l'image en patchs (Vision Transformer) ;
@@ -32,7 +33,7 @@ Ce que la page montre dépend de ce que le code définit :
 - **Prédiction** finale sous forme de barres.
 - **Entraînement en direct** : le bouton « Entraîner » fait apprendre le réseau sur 1 437 vrais chiffres manuscrits (load_digits de scikit-learn, rien à télécharger). Une courbe montre l'erreur baisser, le taux de réussite sur des chiffres jamais vus s'affiche après chaque époque, et toutes les vues passent aux poids appris.
 
-Les réseaux ne sont pas entraînés : les poids sont aléatoires, mais les formes, les filtres et le trajet des données sont réels.
+Tant qu'on n'a pas cliqué sur « Entraîner », les poids sont aléatoires, mais les formes, les filtres et le trajet des données sont réels.
 
 ### Modèles scikit-learn
 

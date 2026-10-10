@@ -71,6 +71,14 @@
         <p class="hint">Le trajet réel des données, de haut en bas. Deux boîtes côte à côte travaillent en parallèle ; une flèche qui contourne des boîtes est un raccourci (connexion résiduelle) ; ⊕ marque l'endroit où deux chemins s'additionnent ou se combinent.</p>
         <div id="blocks" class="graph"></div>
       </div>
+      <div class="card graph-card" id="depth-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Vue 3D</span>
+          <span class="shape" id="depth-shape"></span>
+        </div>
+        <p class="hint">Chaque plaque est la sortie d'une couche : une ligne par mot, une case par nombre de son vecteur (orange positif, bleu négatif). Les plaques s'empilent dans l'ordre du calcul, comme les couches de BERT. Fais glisser pour tourner ; survole une plaque pour retrouver sa ligne de code.</p>
+        <canvas id="depth" class="depth"></canvas>
+      </div>
       <div id="layers"></div>
       <div id="prediction"></div>
     </section>
@@ -82,6 +90,7 @@
   <script src="/static/blocks.js"></script>
   <script src="/static/ml.js"></script>
   <script src="/static/agents.js"></script>
+  <script src="/static/depth.js"></script>
   <script src="/static/train.js"></script>
   <script src="/static/app.js"></script>
 </body>

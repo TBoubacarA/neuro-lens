@@ -21,6 +21,7 @@ MAX_MAP_SIZE = 32  # côté maximal d'une carte renvoyée
 MAX_VECTOR = 64  # valeurs renvoyées pour une sortie à plat
 MAX_TOKENS = 20  # tokens renvoyés pour une séquence
 MAX_DIMS = 8  # dimensions affichées par vecteur de token
+MAX_DEPTH_DIMS = 32  # dimensions par token pour la vue 3D
 MAX_HEADS = 8  # têtes d'attention renvoyées
 MAX_GRAPH_NODES = 5000  # opérations parcourues pour retrouver d'où vient une valeur
 INPUT = -1  # numéro de « l'entrée du modèle » dans les liens entre couches
@@ -105,6 +106,7 @@ def _preview(out: torch.Tensor) -> dict:
             "kind": "tokens",
             "probs": probs,  # chaque ligne est une répartition qui somme à 1 (softmax, routeur...)
             "rows": [[round(v, 3) for v in r] for r in rows[:, :MAX_DIMS].tolist()],
+            "wide": [[round(v, 3) for v in r] for r in rows[:, :MAX_DEPTH_DIMS].tolist()],  # vue 3D
             "dim": x.shape[1],
             "length": x.shape[0],
             "values": [round(v, 4) for v in x.float().abs().mean(dim=0)[:MAX_VECTOR].tolist()],
