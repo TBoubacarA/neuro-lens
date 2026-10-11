@@ -399,3 +399,39 @@ input.ops-drift { width: 160px; display: inline-block; margin: 0; }
 .ops-figure b { color: var(--text); }
 .ops-psi.watch { color: var(--act); }
 .ops-psi.alert { color: var(--danger); font-weight: 700; }
+
+/* LLMOps / AgentOps : trace, coût, évaluation */
+.llm-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; margin: 6px 0 8px; }
+.llm-kpis > div { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; display: flex; flex-direction: column; }
+.llm-kpis span, .llm-kpis i { font-size: 11px; color: var(--muted); font-style: normal; }
+.llm-kpis b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.llm-stop { color: var(--danger) !important; font-weight: 700; }
+.llm-box { overflow-x: auto; }
+.llm-svg { display: block; max-width: 100%; }
+.llm-grid { stroke: var(--border); stroke-width: 1; }
+.llm-tick { fill: var(--muted); font-size: 9px; text-anchor: middle; }
+.llm-name { fill: var(--text); font-size: 10.5px; text-anchor: end; font-family: ui-monospace, Menlo, monospace; }
+.llm-span.llm .llm-name { fill: var(--accent); }
+.llm-span rect { fill: var(--other); opacity: .85; }
+.llm-span.llm rect { fill: var(--accent); }
+.llm-span.link { cursor: pointer; }
+.llm-span.link:hover rect { opacity: 1; filter: brightness(1.25); }
+.llm-detail { fill: var(--muted); font-size: 9.5px; }
+.llm-detail.end { text-anchor: end; }
+.llm-score { height: 6px; background: var(--border); border-radius: 3px; margin: 6px 0 8px; overflow: hidden; }
+.llm-score-fill { height: 100%; background: var(--ok); }
+.llm-score-fill.mid { background: var(--act); }
+.llm-score-fill.bad { background: var(--danger); }
+.llm-table { border-collapse: collapse; font-size: 12px; width: 100%; display: block; overflow-x: auto; }
+.llm-table th { text-align: left; color: var(--muted); font-weight: 400; padding: 3px 10px 3px 0; white-space: nowrap; }
+.llm-table td { padding: 4px 10px 4px 0; border-top: 1px solid var(--border); vertical-align: top; max-width: 260px; overflow-wrap: anywhere; }
+.llm-table td.num { white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+.llm-table tr.ok td:first-child { color: var(--ok); font-weight: 700; }
+.llm-table tr.ko td:first-child { color: var(--danger); font-weight: 700; }
+.shape.llm-good { color: var(--ok); }
+.shape.llm-bad { color: var(--danger); }
+.llm-compare td.bar { min-width: 120px; }
+.llm-compare td.bar .llm-score { margin: 5px 0; }
+.llm-compare tr.best td { background: #4cd98a14; }
+.llm-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 4px; }
+.llm-tabs button.on { border-color: var(--accent); color: var(--accent); }

@@ -257,7 +257,12 @@ def _other_kinds(code: str, namespace: dict, override: dict | None = None) -> di
                 mlops.record_run(result)
                 result["mlops"] = mlops.state()
         elif graph is not None and agents.is_langgraph(graph):
-            result = agents.describe(graph, namespace, code)
+            from server import llmops  # AgentOps : la trace de l'exécution, et l'évaluation sur `cas`
+
+            with llmops.trace(namespace) as tr:
+                result = agents.describe(graph, namespace, code)
+            result["ops"] = llmops.summary(tr, namespace)
+            result["ops"]["eval"] = llmops.evaluate(graph, namespace)
             name = "graph"
         else:
             return {

@@ -228,6 +228,7 @@ function renderOther(res) {
   } else {
     setStatus(`agent · ${res.steps.length} passage${res.steps.length > 1 ? "s" : ""}`, res.stopped ? "err" : "ok");
     renderAgent($("layers"), res, highlightLine, revealLine, () => run(true));
+    renderLLMOps($("layers"), res, highlightLine, revealLine);
   }
 }
 
