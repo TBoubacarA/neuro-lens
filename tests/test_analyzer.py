@@ -684,3 +684,38 @@ def test_expert_track_counts_only_real_dated_proofs():
         assert client.post("/api/progress/challenge", json={"signature": "x", "right": 3, "total": 3}).json()["levels"][0]["checks"][0]["count"] == 4
         client.post("/api/analyze", json={"code": TREE})
         assert client.get("/api/progress").json()["levels"][1]["checks"][0]["count"] == 1
+
+
+def test_mode_panne_injects_a_fault_the_views_can_show():
+    """Chaque panne de la banque s'applique à au moins un exemple, le code cassé s'analyse encore,
+    et la cause se retrouve (ligne allumée) quand on la devine ou qu'on la révèle."""
+    import re
+    from pathlib import Path
+
+    from server import pannes
+
+    src = (Path(__file__).resolve().parent.parent / "web" / "examples.js").read_text(encoding="utf-8")
+    examples = dict(re.findall(r'\n  "([^"]+)": `(.*?)`,\n', src, re.S))
+    covered = {p["id"] for code in examples.values() for p in pannes.applicables(code)}
+    assert covered == {p["id"] for p in pannes.PANNES}
+
+    # Une fuite d'information : le score devient parfait, et la ligne fautive est celle du X.
+    mlops = examples["MLOps : de l'essai à la production"]
+    fuite = next(p for p in pannes.PANNES if p["id"] == "fuite-cible")
+    broken = pannes.inject(mlops, fuite)
+    res = analyze(broken)
+    assert res["ok"] and res["kind"] == "ml" and res["score"] == 1.0
+    assert pannes.guess("fuite-cible", "Sur-apprentissage") == {"ok": True, "juste": False}
+    found = pannes.guess("fuite-cible", "Fuite d'information", broken)
+    assert found["juste"] and "risque" in broken.splitlines()[found["line"] - 1]
+
+    # Un agent qui boucle : le garde-fou l'arrête, et la révélation nomme la boucle.
+    agent = examples["Agent IA avec Claude (LangGraph)"]
+    started = pannes.start(agent, exclude=[p["id"] for p in pannes.applicables(agent) if p["id"] != "boucle"])
+    assert started["id"] == "boucle" and "Boucle sans fin" in started["choix"]
+    res = analyze(started["code"])
+    assert res["ok"] and res["stopped"]
+    assert pannes.reveal("boucle", started["code"])["cause"] == "Boucle sans fin"
+
+    # Un code sans panne connue : on le dit, sans casser quoi que ce soit.
+    assert pannes.start("x = 1")["ok"] is False

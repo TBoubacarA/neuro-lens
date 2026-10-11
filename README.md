@@ -140,6 +140,7 @@ server/
   workspace.py le projet autour du code de l'éditeur : fichiers générés, tests, ouverture dans VS Code
   progress.py  parcours expert : niveaux, vérifications, preuves datées
   llmops.py    trace des agents, tokens et coût, garde-fou, évaluation sur un jeu de cas
+  pannes.py    mode panne : banque de fautes à glisser dans le code, symptômes, causes
 tests/
 ```
 
@@ -148,6 +149,7 @@ Le serveur exécute le code tapé dans l'éditeur : il est fait pour tourner sur
 ## S'entraîner, pas seulement regarder
 
 - **Mode défi** (bouton en haut) : pour un réseau PyTorch, les vues sont cachées tant que tu n'as pas prédit la forme de sortie de trois couches et le nombre de paramètres d'une quatrième. La correction donne le calcul. Seul un sans-faute compte.
+- **Mode panne** (bouton en haut) : une faute est glissée dans le code de l'exemple, comme il en arrive en production : goulot dans le réseau, dropout à 0,9, fuite de la variable cible, étiquettes mélangées, classes déséquilibrées, arbre sans fond, outil d'agent qui ment, boucle sans fin, règle de sortie trop stricte. La carte dit ce qu'on doit voir à droite, tu nommes la famille de cause, puis la cause est expliquée et la ligne fautive s'allume dans le code. Treize pannes, choisies selon ce que ton code contient ; « Quitter » rend le code sain.
 - **Parcours expert** (bouton en haut) : huit niveaux, de « lire un modèle » à « réparer un système en panne ». Rien ne se coche à la main : chaque ligne s'appuie sur une preuve datée que l'outil a constatée (défi réussi, essais suivis, tests verts, version déployée, conteneur qui répond, alerte de dérive). Les vérifications que l'outil ne sait pas encore faire sont affichées comme telles. Les preuves sont gardées dans `.neuro-lens/parcours.json`.
 
 ## Feuille de route

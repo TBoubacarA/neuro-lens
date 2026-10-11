@@ -33,7 +33,8 @@ async function panneStart() {
     b.addEventListener("click", () => panneGuess(c, b));
     choices.appendChild(b);
   });
-  setCode(res.code); // l'éditeur relance l'analyse : les symptômes apparaissent à droite
+  setCode(res.code);
+  codeChanged(); // l'analyse repart : les symptômes apparaissent à droite
   card.scrollIntoView({ block: "start" });
 }
 
@@ -74,7 +75,7 @@ async function panneReveal() {
 function panneQuit() {
   document.getElementById("panne-card").hidden = true;
   document.getElementById("panne-btn").classList.remove("on");
-  if (panne.original !== null) setCode(panne.original);
+  if (panne.original !== null) { setCode(panne.original); codeChanged(); }
   Object.assign(panne, { id: null, original: null, fini: false, vus: [] });
 }
 
