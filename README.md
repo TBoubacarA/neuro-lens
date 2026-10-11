@@ -10,6 +10,8 @@ Chaque ligne de code prend forme sous tes yeux. Neuro-lens ouvre une fenêtre su
 - **Lien code ↔ visuel** : le curseur sur une ligne allume l'élément correspondant ; survoler un élément surligne sa ligne.
 - **Erreurs expliquées** : une erreur de taille est traduite en français (« La couche Linear attend 1568 valeurs… Mets in_features=1352 ») et la ligne fautive est soulignée.
 
+- **Colonnes redimensionnables** : glisse les séparateurs entre l'explorateur, le code et les vues ; les largeurs sont gardées d'une visite à l'autre (double-clic pour revenir à la taille d'origine, flèches au clavier).
+
 Ce que la page montre dépend de ce que le code définit :
 
 | Le code définit | La page montre |

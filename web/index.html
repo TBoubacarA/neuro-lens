@@ -30,12 +30,17 @@
         </div>
         <div id="project-path" class="project-path" title="Emplacement du projet sur le disque"></div>
       </aside>
+      <div class="splitter" id="split-explorer" role="separator" aria-orientation="vertical" tabindex="0"
+           aria-label="Largeur de l'explorateur" title="Glisse pour élargir ou réduire · double-clic : taille d'origine"></div>
       <div class="editor-col">
         <div id="tabs" class="tabs" hidden></div>
         <div id="editor"></div>
         <div id="error" class="error" hidden></div>
       </div>
     </section>
+
+    <div class="splitter" id="split-main" role="separator" aria-orientation="vertical" tabindex="0"
+         aria-label="Largeur du code et des vues" title="Glisse pour élargir ou réduire · double-clic : moitié-moitié"></div>
 
     <section class="pane lens-pane" id="lens">
       <div class="card input-card" id="input-card">
@@ -166,5 +171,6 @@
   <script src="/static/explore.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/project.js"></script>
+  <script src="/static/layout.js"></script>
 </body>
 </html>
