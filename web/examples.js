@@ -380,3 +380,23 @@ variantes = {
 }
 `,
 };
+
+// Deux entrées de plus dans le menu, qui disent où sont les chaînes MLOps et LLMOps : le même code
+// que les exemples correspondants, avec une consigne en tête.
+window.NEURO_EXAMPLES["MLOps : de l'essai à la production"] =
+  "# Chaîne MLOps : sous l'arbre, à droite, six étapes réelles : données, entraînement, suivi des essais,\n" +
+  "# versions et mise en production (« Déployer »), API de prédiction, surveillance et dérive.\n" +
+  "# Bouge le curseur max_depth pour remplir le suivi des essais.\n\n" + window.NEURO_EXAMPLES["ML classique : arbre de décision"];
+window.NEURO_EXAMPLES["LLMOps et AgentOps : tracer et évaluer un agent"] =
+  "# Sous le déroulé de l'agent, à droite : la trace (étapes, appels au modèle, tokens, coût), le garde-fou\n" +
+  "# LIMITES, et l'évaluation sur `cas` avec deux variantes de prompt comparées.\n\n" + window.NEURO_EXAMPLES["Agent IA avec Claude (LangGraph)"];
+
+// Le menu, par chapitre.
+window.NEURO_CHAPTERS = {
+  "Réseaux de neurones (PyTorch)": ["CNN simple (MNIST)", "LeNet-5 (classe)", "Perceptron multicouche", "Erreur à corriger",
+    "Mini-Transformer (texte)", "Mini-ViT (image en patchs)", "Mélange d'experts (MoE)"],
+  "ML classique (scikit-learn)": ["ML classique : arbre de décision", "ML classique : comparer les modèles",
+    "ML classique : régression", "ML classique : regroupement (K-means)"],
+  "MLOps : jusqu'en production": ["MLOps : de l'essai à la production"],
+  "Agents, LLMOps et AgentOps": ["Agent IA (LangGraph)", "Agent IA avec Claude (LangGraph)", "LLMOps et AgentOps : tracer et évaluer un agent"],
+};

@@ -636,7 +636,12 @@ const fromBase64 = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replac
 
 (async function main() {
   const select = $("examples");
-  Object.keys(window.NEURO_EXAMPLES).forEach((name) => select.add(new Option(name, name)));
+  Object.entries(window.NEURO_CHAPTERS).forEach(([chapter, names]) => {
+    const group = document.createElement("optgroup");
+    group.label = chapter;
+    names.forEach((name) => group.appendChild(new Option(name, name)));
+    select.appendChild(group);
+  });
   $("relight").addEventListener("click", () => { off = []; run(); });
   select.addEventListener("change", () => { off = []; mlOverride = null; $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
   paintPad(seven());
