@@ -26,6 +26,8 @@ GITIGNORE = """# Ce que git ne doit pas suivre : environnement, caches, gros fic
 __pycache__/
 .pytest_cache/
 *.pyc
+# Réglages VS Code propres à cette machine (chemin de l'environnement Python)
+.vscode/
 """
 
 CI = """# Intégration continue : à chaque push et à chaque pull request, GitHub installe le projet
@@ -45,7 +47,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "{python}"
-      - run: pip install -r requirements.txt pytest
+      - run: pip install -r requirements-dev.txt
       - run: pytest -q
 """
 
@@ -135,11 +137,28 @@ README = """# {title}
 
 ## Commandes
 
+### Sur cette machine : rien à installer
+
+Ouvre le dossier dans VS Code, puis un **nouveau terminal** (menu Terminal > New Terminal).
+Les réglages de `.vscode/settings.json` y branchent l'environnement Python de neuro-lens, qui
+contient déjà toutes les bibliothèques, dans les bonnes versions :
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt pytest
 pytest                      # lancer les tests
 {run}
+```
+
+Les tests apparaissent aussi dans l'onglet « Testing » de VS Code (l'icône en forme de fiole).
+
+### Sur une autre machine
+
+Il faut Python {python} ou plus récent : les versions fixées dans `requirements.txt` n'existent pas
+pour un Python plus ancien (c'est l'erreur « No matching distribution found »).
+
+```bash
+python{python} -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest
 ```
 """
 
@@ -163,7 +182,7 @@ def _tree(paths: list[str]) -> str:
 
 def _readme(title: str, summary: str, files: list[dict], run: str) -> dict:
     roles = "\n".join(f"- `{f['path']}` : {f['role']}" for f in files)
-    text = README.format(title=title, summary=summary, tree=_tree([f["path"] for f in files] + ["README.md"]), roles=roles, run=run)
+    text = README.format(title=title, summary=summary, tree=_tree([f["path"] for f in files] + ["README.md"]), roles=roles, run=run, python=_python())
     return _file("README.md", "La porte d'entrée du projet : ce qu'il fait, comment il est rangé, comment le lancer.", text)
 
 
@@ -171,9 +190,26 @@ def _python() -> str:
     return ".".join(platform.python_version_tuple()[:2])
 
 
+def _vscode() -> str:
+    """Réglages VS Code : l'interpréteur et le terminal utilisent l'environnement qui fait tourner neuro-lens."""
+    bin_dir = Path(sys.executable).parent
+    path = f"{bin_dir}:${{env:PATH}}"
+    return json.dumps({
+        "python.defaultInterpreterPath": sys.executable,
+        "terminal.integrated.env.osx": {"PATH": path},
+        "terminal.integrated.env.linux": {"PATH": path},
+        "python.testing.pytestEnabled": True,
+        "python.testing.unittestEnabled": False,
+        "python.testing.pytestArgs": ["tests"],
+    }, indent=2) + "\n"
+
+
 def _common(requirements: str) -> list[dict]:
+    needs = f"# Python {_python()} ou plus récent : ces versions n'existent pas pour un Python plus ancien.\n"
     return [
-        _file("requirements.txt", "Les bibliothèques dont le projet a besoin, avec leur version : même installation partout.", requirements),
+        _file("requirements.txt", "Les bibliothèques dont le projet a besoin, avec leur version : même installation partout.", needs + requirements),
+        _file("requirements-dev.txt", "Les outils en plus pour développer et tester (pytest), inutiles en production.", "-r requirements.txt\npytest\n"),
+        _file(".vscode/settings.json", "Les réglages VS Code du projet : quel Python utiliser, et où sont les tests. Dans un nouveau terminal, `pip` et `pytest` marchent tout de suite.", _vscode()),
         _file(".github/workflows/tests.yml", "L'intégration continue : GitHub lance les tests à chaque push et chaque pull request.", CI.format(python=_python())),
         _file(".gitignore", "Ce que git ne doit pas suivre : environnement virtuel, caches.", GITIGNORE),
     ]

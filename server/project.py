@@ -88,7 +88,7 @@ def _count_lines(path: Path) -> int | None:
 def tree(base: Path, rel: str = "", depth: int = 0) -> list[dict]:
     items = []
     for path in sorted(base.iterdir(), key=lambda p: (p.is_file(), p.name.lower())):
-        if path.name in SKIP or (path.name.startswith(".") and path.name not in {".github", ".gitignore"}):
+        if path.name in SKIP or (path.name.startswith(".") and path.name not in {".github", ".gitignore", ".vscode"}):
             continue
         r = f"{rel}/{path.name}" if rel else path.name
         node = {"name": path.name, "path": r, "kind": "dir" if path.is_dir() else "file", "role": role_of(r, path)}
@@ -141,6 +141,7 @@ def graph(base: Path, package: str = "server") -> dict:
 
 
 CODE_FOLDERS = {
+    ".vscode": "Les réglages de VS Code pour ce projet seulement.",
     "src": "Le code du projet : ce que tu écris.",
     "tests": "Les tests automatiques : ils protègent le code des régressions, sur ta machine et sur GitHub.",
     "service": "L'unité qu'on déploie : le service, le modèle figé, sa fiche, la recette de l'image. Rien d'autre ne part en production.",

@@ -603,6 +603,18 @@ def test_workspace_around_the_code_is_real_and_its_tests_pass(tmp_path, monkeypa
     tests = workspace.run_tests()
     assert tests["passed"], tests["output"]
 
+    # Prêt pour VS Code : l'interpréteur et le terminal pointent sur un Python qui a les bibliothèques
+    import json
+    import subprocess
+    import sys
+
+    settings = json.loads((root / ".vscode/settings.json").read_text())
+    assert settings["python.defaultInterpreterPath"] == sys.executable and settings["python.testing.pytestEnabled"]
+    env_path = settings["terminal.integrated.env.osx"]["PATH"].replace("${env:PATH}", "/usr/bin:/bin")
+    run = subprocess.run(["pytest", "-q", "-p", "no:cacheprovider"], cwd=root, env={"PATH": env_path}, capture_output=True, text=True)
+    assert run.returncode == 0, run.stdout + run.stderr  # `pytest` tapé dans ce terminal marche
+    assert "Python 3." in (root / "requirements.txt").read_text() and "pytest" in (root / "requirements-dev.txt").read_text()
+
     # Le dossier service/ se suffit à lui-même : son serve.py trouve son modèle
     import importlib.util
 
