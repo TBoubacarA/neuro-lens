@@ -633,6 +633,7 @@ def test_workspace_around_the_code_is_real_and_its_tests_pass(tmp_path, monkeypa
 
     # Les autres familles ont aussi leur projet ; l'ancien est remplacé, sans restes
     assert analyze(CNN)["workspace"]["main"] == "src/model.py"
+    assert "numpy==" in (root / "requirements.txt").read_text()  # sans lui, PyTorch avertit à chaque démarrage
     assert not (root / "service").exists() and not (root / "src/train.py").exists()
     assert workspace.run_tests()["passed"]
     assert analyze(AGENT)["workspace"]["main"] == "src/agent.py"
