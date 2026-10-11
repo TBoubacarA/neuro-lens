@@ -216,6 +216,22 @@ def infra_predict_endpoint(req: PredictRequest) -> dict:
     return infra.predict(req.rows)
 
 
+@app.post("/api/workspace/test")
+def workspace_test_endpoint() -> dict:
+    """Lance pytest dans le projet écrit autour du code de l'éditeur."""
+    from server import workspace
+
+    return workspace.run_tests()
+
+
+@app.post("/api/workspace/open")
+def workspace_open_endpoint() -> dict:
+    """Ouvre ce projet dans VS Code."""
+    from server import workspace
+
+    return workspace.open_in_editor()
+
+
 @app.post("/api/reset")
 def reset_endpoint(req: CodeRequest) -> dict:
     return worker.run(req.code, None, op="reset")
