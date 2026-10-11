@@ -430,7 +430,9 @@ def test_mlops_chain_from_run_to_drift_alert(tmp_path, monkeypatch):
         assert client.post("/predict", json={"rows": [prod["example"]]}).json()["predictions"] == answer["predictions"][:1]
         assert client.post("/predict", json={"rows": [[1.0]]}).status_code == 422
 
-    # 5. Surveillance : sans dérive tout va bien ; avec, l'alerte se lève et la qualité baisse
+    # 5. Surveillance : trois requêtes ne suffisent pas à crier à la dérive
+    assert mlops.state()["monitoring"]["status"] == "few"
+    # Sans dérive tout va bien ; avec, l'alerte se lève et la qualité baisse
     mlops._events.clear()
     calm = mlops.simulate(200, 0.0)["mlops"]["monitoring"]
     assert calm["requests"] == 200 and calm["status"] == "ok" and calm["quality"] > 0.85
@@ -539,3 +541,9 @@ def test_infra_explains_what_is_missing(tmp_path, monkeypatch):
     assert "déploie d'abord" in infra.build()["error"]
     assert infra.status()["infra"]["phase"] == "idle"
     assert not infra.predict([[0.0, 0.0]])["ok"]  # aucun conteneur lancé
+
+
+def test_feature_names_from_the_code_are_used():
+    code = TREE + 'feature_names = ["température", "vibration"]\n'
+    assert analyze(code)["features"] == ["température", "vibration"]
+    assert analyze(TREE + 'feature_names = ["une seule"]\n')["features"] == ["x1", "x2"]  # mauvais nombre : ignoré

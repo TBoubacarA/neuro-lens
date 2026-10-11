@@ -441,3 +441,6 @@ input.ops-drift { width: 160px; display: inline-block; margin: 0; }
 .ops-node.on rect { stroke: var(--ok); stroke-dasharray: none; }
 .ops-node.busy rect { stroke: var(--act); }
 .ops-log { max-height: 180px; color: var(--muted); }
+
+.to-ops { border-color: var(--ok); color: var(--ok); }
+.ops-banner.few { border-left-color: var(--other); background: #ffffff0a; }

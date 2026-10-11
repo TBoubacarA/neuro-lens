@@ -211,6 +211,25 @@ X = load_iris().data
 model = KMeans(n_clusters=3, n_init=10, random_state=0)
 `,
 
+  "MLOps : de l'essai à la production": `import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+
+# Une machine d'usine : deux capteurs, et une question — va-t-elle tomber en panne ?
+# Ce modèle sert de fil rouge à toute la chaîne MLOps, affichée à droite :
+#   essais -> version -> image Docker -> API de prédiction -> surveillance.
+rng = np.random.default_rng(0)
+temperature = rng.normal(70, 12, 400)        # °C
+vibration = rng.normal(3.0, 1.0, 400)        # mm/s
+risque = 0.08 * (temperature - 70) + 1.1 * (vibration - 3.0) + rng.normal(0, 0.6, 400)
+
+X = np.column_stack([temperature, vibration])
+y = np.where(risque > 0.8, "panne", "ok")
+feature_names = ["température", "vibration"]
+
+# Change max_depth (ou bouge le curseur « Réglage ») : chaque essai est noté dans « Suivi des essais ».
+model = RandomForestClassifier(n_estimators=40, max_depth=4, random_state=0)
+`,
+
   "Agent IA (LangGraph)": `from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
 

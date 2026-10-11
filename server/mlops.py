@@ -25,6 +25,7 @@ MAX_RUNS = 40
 MAX_EVENTS = 3000
 WINDOW = 50  # requêtes par point de la courbe de qualité
 BINS = 12
+MIN_EVENTS = 50  # en dessous, trop peu de requêtes pour parler de dérive
 DRIFT_WATCH, DRIFT_ALERT = 0.1, 0.25  # seuils usuels de l'indice de stabilité (PSI)
 
 _runs: list[dict] = []
@@ -321,7 +322,9 @@ def _monitoring(prod: dict) -> dict | None:
         "latency_p95": round(float(np.percentile(latencies, 95)), 3),
         "features": features,
         "drift": worst,
-        "status": "alert" if worst >= DRIFT_ALERT else "watch" if worst >= DRIFT_WATCH else "ok",
+        # Avec une poignée de requêtes, tout écart est dû au hasard : on ne juge pas encore.
+        "status": "few" if len(_events) < MIN_EVENTS
+        else "alert" if worst >= DRIFT_ALERT else "watch" if worst >= DRIFT_WATCH else "ok",
     }
     labelled = [e for e in _events if e["truth"] is not None]
     if labelled and card["task"] == "classification":
