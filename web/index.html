@@ -16,6 +16,7 @@
     <button id="defi-btn" class="small" title="Prédis les formes et les paramètres avant que l'outil les montre">Mode défi</button>
     <button id="parcours-btn" class="small" title="Le parcours expert : 8 niveaux, avec les preuves de ce que tu as réussi">Parcours</button>
     <button id="project-btn" class="small" title="Les fichiers du projet, leur rôle et leurs dépendances">Projet</button>
+    <button id="panne-btn" class="small" title="Une faute est glissée dans le code : trouve-la aux symptômes, comme en production">Panne</button>
     <span id="status" class="status">…</span>
   </header>
 
@@ -54,6 +55,22 @@
         <div id="parcours-levels"></div>
       </div>
       <div class="card defi-card" id="defi-card" hidden></div>
+      <div class="card panne-card" id="panne-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Mode panne</span>
+          <span class="shape" id="panne-count"></span>
+        </div>
+        <p class="hint">Une faute vient d'être glissée dans ce code, comme il en arrive en production. Ne le relis pas tout de suite : regarde d'abord les vues à droite (entraîne si besoin).</p>
+        <p class="panne-symptom" id="panne-symptom"></p>
+        <p class="hint">À ton avis, quelle famille de cause produit ce que tu vois ?</p>
+        <div class="panne-choices" id="panne-choices"></div>
+        <div class="panne-actions">
+          <button id="panne-reveal" class="small">Montrer la cause</button>
+          <button id="panne-again" class="small">Une autre panne</button>
+          <button id="panne-quit" class="small">Quitter le mode panne</button>
+        </div>
+        <div class="panne-result" id="panne-result" hidden></div>
+      </div>
       <div class="card input-card" id="input-card">
         <div class="card-head">
           <span class="tag tag-input">Entrée</span>
@@ -181,6 +198,7 @@
   <script src="/static/dream.js"></script>
   <script src="/static/explore.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/pannes.js"></script>
   <script src="/static/project.js"></script>
   <script src="/static/layout.js"></script>
   <script src="/static/parcours.js"></script>

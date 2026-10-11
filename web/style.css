@@ -538,3 +538,15 @@ body.resizing .editor-col, body.resizing .lens-pane, body.resizing .explorer { p
 .level li.untracked { opacity: .55; }
 header { flex-wrap: wrap; row-gap: 6px; }
 html, body { overflow: clip; } /* aucun défilement de la page, même déclenché par un script */
+/* Mode panne : une faute cachée dans le code, à reconnaître aux symptômes. */
+.panne-card { border-left-color: var(--danger); }
+.panne-card.solved { border-left-color: var(--ok); }
+#panne-btn.on { border-color: var(--danger); color: #ffb4b4; }
+.panne-symptom { margin: 4px 0 10px; padding: 8px 10px; border-left: 3px solid var(--danger); background: var(--bg); font-size: 13px; line-height: 1.5; }
+.panne-choices { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.panne-choices button.wrong { border-color: var(--danger); color: #ffb4b4; opacity: .7; }
+.panne-choices button.right { border-color: var(--ok); color: var(--ok); }
+.panne-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.panne-result { margin-top: 10px; padding: 8px 10px; border-radius: 6px; background: var(--bg); font-size: 12.5px; line-height: 1.5; }
+.panne-result.bad { color: #ffb4b4; }
+.panne-result.good b { color: var(--ok); }
