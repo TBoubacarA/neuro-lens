@@ -116,8 +116,45 @@ app = FastAPI(title="neuro-lens", lifespan=lifespan)
 
 @app.post("/api/analyze")
 def analyze_endpoint(req: AnalyzeRequest) -> dict:
-    return worker.run(req.code, req.pixels, req.text, op="live" if req.live else "analyze",
-                      off=req.off, epoch=req.epoch, override=req.override)
+    result = worker.run(req.code, req.pixels, req.text, op="live" if req.live else "analyze",
+                        off=req.off, epoch=req.epoch, override=req.override)
+    for run in (result.get("mlops") or {}).get("runs", []):  # parcours expert : chaque essai suivi est une preuve
+        _proof("essais.suivis", f"{run['estimator']} {run['setting']}".strip(), run["key"])
+    return result
+
+
+def _proof(key: str, what: str, unique: str | None = None) -> None:
+    """Note une preuve dans le parcours expert, sans jamais faire échouer l'action en cours."""
+    try:
+        from server import progress
+
+        progress.record(key, what, unique)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+class ChallengeRequest(BaseModel):
+    signature: str  # la forme du réseau : deux réseaux différents comptent pour deux preuves
+    right: int
+    total: int
+
+
+@app.get("/api/progress")
+def progress_endpoint() -> dict:
+    """Le parcours expert : niveaux, vérifications et preuves."""
+    from server import progress
+
+    return progress.state()
+
+
+@app.post("/api/progress/challenge")
+def progress_challenge_endpoint(req: ChallengeRequest) -> dict:
+    """Résultat d'un défi « prédis avant de voir » ; seul un sans-faute compte comme preuve."""
+    from server import progress
+
+    if req.total > 0 and req.right == req.total:
+        _proof("defi.formes", f"{req.total} prédictions justes sur {req.total}", req.signature)
+    return progress.state()
 
 
 class CodeRequest(BaseModel):
@@ -162,7 +199,10 @@ class DeployRequest(BaseModel):
 @app.post("/api/deploy")
 def deploy_endpoint(req: DeployRequest) -> dict:
     """Fige le modèle scikit-learn du code dans une nouvelle version et la met en production."""
-    return worker.run(req.code, None, op="deploy", override=req.override)
+    result = worker.run(req.code, None, op="deploy", override=req.override)
+    if result.get("ok"):
+        _proof("service.version", f"version {result.get('deployed')} en production", f"v{result.get('deployed')}")
+    return result
 
 
 class PredictRequest(BaseModel):
@@ -183,7 +223,13 @@ class SimulateRequest(BaseModel):
 @app.post("/api/simulate")
 def simulate_endpoint(req: SimulateRequest) -> dict:
     """Envoie de fausses requêtes de production, plus ou moins éloignées des données d'entraînement."""
-    return worker.run("", None, op="simulate", override={"n": req.n, "drift": req.drift})
+    result = worker.run("", None, op="simulate", override={"n": req.n, "drift": req.drift})
+    watch = (result.get("mlops") or {}).get("monitoring") or {}
+    if req.n > 0 and watch.get("status") == "alert":
+        _proof("derive.alerte", f"alerte levée, indice de dérive {watch.get('drift')}")
+    elif req.n > 0 and watch.get("status") == "ok":
+        _proof("derive.sain", f"{watch.get('requests')} requêtes sans alerte")
+    return result
 
 
 @app.post("/api/infra/build")
@@ -213,7 +259,10 @@ def infra_predict_endpoint(req: PredictRequest) -> dict:
     """La même demande de prédiction, mais envoyée au conteneur."""
     from server import infra
 
-    return infra.predict(req.rows)
+    result = infra.predict(req.rows)
+    if result.get("ok"):
+        _proof("service.conteneur", f"le conteneur a répondu (version {result.get('version')})", f"conteneur-v{result.get('version')}")
+    return result
 
 
 @app.post("/api/workspace/test")
@@ -221,7 +270,10 @@ def workspace_test_endpoint() -> dict:
     """Lance pytest dans le projet écrit autour du code de l'éditeur."""
     from server import workspace
 
-    return workspace.run_tests()
+    result = workspace.run_tests()
+    if result.get("ok") and result.get("passed"):
+        _proof("tests.projet", "tests du projet verts")
+    return result
 
 
 @app.post("/api/workspace/open")

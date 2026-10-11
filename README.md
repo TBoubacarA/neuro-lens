@@ -138,11 +138,17 @@ server/
   agents.py    agents LangGraph
   project.py   vue Projet : arborescence, rôle des fichiers, plan, graphe des modules
   workspace.py le projet autour du code de l'éditeur : fichiers générés, tests, ouverture dans VS Code
+  progress.py  parcours expert : niveaux, vérifications, preuves datées
   llmops.py    trace des agents, tokens et coût, garde-fou, évaluation sur un jeu de cas
 tests/
 ```
 
 Le serveur exécute le code tapé dans l'éditeur : il est fait pour tourner sur ta machine (il n'écoute que sur 127.0.0.1), pas pour être exposé sur Internet.
+
+## S'entraîner, pas seulement regarder
+
+- **Mode défi** (bouton en haut) : pour un réseau PyTorch, les vues sont cachées tant que tu n'as pas prédit la forme de sortie de trois couches et le nombre de paramètres d'une quatrième. La correction donne le calcul. Seul un sans-faute compte.
+- **Parcours expert** (bouton en haut) : huit niveaux, de « lire un modèle » à « réparer un système en panne ». Rien ne se coche à la main : chaque ligne s'appuie sur une preuve datée que l'outil a constatée (défi réussi, essais suivis, tests verts, version déployée, conteneur qui répond, alerte de dérive). Les vérifications que l'outil ne sait pas encore faire sont affichées comme telles. Les preuves sont gardées dans `.neuro-lens/parcours.json`.
 
 ## Feuille de route
 

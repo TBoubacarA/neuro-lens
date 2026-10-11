@@ -659,3 +659,28 @@ def test_output_guardrails_check_each_answer(monkeypatch):
     strict = analyze(_example("Agent IA avec Claude (LangGraph)").replace('"max_mots": 25', '"max_mots": 3'))
     assert [v["regle"] for v in strict["ops"]["violations"]] == ["max_mots"]
     assert strict["ops"]["eval"]["variants"][0]["clean"] == 0 and all(r["violations"] for r in strict["ops"]["eval"]["rows"])
+
+
+def test_expert_track_counts_only_real_dated_proofs():
+    from server import progress
+
+    first = progress.state()["levels"][0]
+    assert first["name"] == "Lire un modèle" and first["status"] == "todo" and first["checks"][0]["status"] == "todo"
+    assert progress.record("defi.formes", "4 sur 4", "reseau-a") and not progress.record("defi.formes", "4 sur 4", "reseau-a")
+    progress.record("defi.formes", "4 sur 4", "reseau-b")
+    assert progress.state()["levels"][0]["checks"][0]["status"] == "doing"
+    progress.record("defi.formes", "3 sur 3", "reseau-c")
+    check = progress.state()["levels"][0]["checks"][0]
+    assert check["count"] == 3 and check["status"] == "confirm"  # trois réussites le même jour : à confirmer un autre jour
+    # un niveau dont une vérification n'est pas mesurable n'est jamais déclaré validé
+    progress.record("service.version", "v1", "v1")
+    progress.record("service.conteneur", "ok", "c1")
+    serve = progress.state()["levels"][3]
+    assert serve["done"] == serve["tracked"] == 2 and serve["status"] == "measured"
+    assert progress.state()["levels"][7]["status"] == "empty"
+
+    with TestClient(__import__("server.app", fromlist=["app"]).app) as client:
+        assert client.post("/api/progress/challenge", json={"signature": "x", "right": 2, "total": 3}).json()["levels"][0]["checks"][0]["count"] == 3
+        assert client.post("/api/progress/challenge", json={"signature": "x", "right": 3, "total": 3}).json()["levels"][0]["checks"][0]["count"] == 4
+        client.post("/api/analyze", json={"code": TREE})
+        assert client.get("/api/progress").json()["levels"][1]["checks"][0]["count"] == 1
