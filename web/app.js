@@ -45,6 +45,7 @@ let lastResult = null; // pour rejouer la construction
 let otherKind = false; // le dernier affichage réussi n'était pas un réseau PyTorch
 let lastInput = null; // aperçu de l'entrée, pour montrer son découpage en patchs
 let tokens = null;   // mots de la phrase d'entrée, quand le modèle lit du texte
+let jumpToOps = false; // l'exemple « MLOps » vient d'être choisi : aller droit à la chaîne
 let mlOverride = null; // réglage scikit-learn choisi au curseur, à la place de celui du code
 let shownEpoch = null; // null = les derniers poids appris ; sinon le réseau après N époques
 
@@ -221,10 +222,12 @@ function renderOther(res) {
   tokens = null;
   ["input-card", "graph-card", "blocks-card", "depth-card", "train-card", "dream-card", "attack-card", "landscape-card"].forEach((id) => { $(id).hidden = true; });
   $("prediction").innerHTML = "";
+  $("to-ops").hidden = res.kind !== "ml";
   if (res.kind === "ml") {
     setStatus(`${res.estimator} · ${res.n_samples} exemples`, "ok");
     renderML($("layers"), res, highlightLine, revealLine, (name, value) => { mlOverride = { [name]: value }; run(); });
     renderMLOps($("layers"), res, { code: getCode, override: () => mlOverride });
+    if (jumpToOps) { jumpToOps = false; $("mlops")?.scrollIntoView({ block: "start" }); }
   } else {
     setStatus(`agent · ${res.steps.length} passage${res.steps.length > 1 ? "s" : ""}`, res.stopped ? "err" : "ok");
     renderAgent($("layers"), res, highlightLine, revealLine, () => run(true));
@@ -241,6 +244,7 @@ function render(res) {
     renderOther(res);
   } else if (res.ok) {
     otherKind = false;
+    $("to-ops").hidden = true;
     $("input-card").hidden = false;
     err.hidden = true;
     setErrorMarker(null);
@@ -636,9 +640,23 @@ const fromBase64 = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replac
 
 (async function main() {
   const select = $("examples");
-  Object.keys(window.NEURO_EXAMPLES).forEach((name) => select.add(new Option(name, name)));
+  // Le menu est rangé par famille, pour qu'on trouve « MLOps » ou « Agents » sans chercher.
+  const families = [
+    ["MLOps : jusqu'en production", (n) => n.startsWith("MLOps")],
+    ["ML classique (scikit-learn)", (n) => n.startsWith("ML classique")],
+    ["Agents, LLMOps, AgentOps", (n) => n.startsWith("Agent")],
+    ["Réseaux de neurones (PyTorch)", () => true],
+  ];
+  const groups = new Map(families.map(([label]) => [label, Object.assign(document.createElement("optgroup"), { label })]));
+  Object.keys(window.NEURO_EXAMPLES).forEach((name) => {
+    groups.get(families.find(([, test]) => test(name))[0]).appendChild(new Option(name, name));
+  });
+  ["Réseaux de neurones (PyTorch)", "ML classique (scikit-learn)", "MLOps : jusqu'en production", "Agents, LLMOps, AgentOps"]
+    .forEach((label) => select.appendChild(groups.get(label)));
+  select.value = Object.keys(window.NEURO_EXAMPLES)[0];
   $("relight").addEventListener("click", () => { off = []; run(); });
-  select.addEventListener("change", () => { off = []; mlOverride = null; $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
+  $("to-ops").addEventListener("click", () => $("mlops")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  select.addEventListener("change", () => { off = []; mlOverride = null; jumpToOps = select.value.startsWith("MLOps"); $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
   paintPad(seven());
   $("text").addEventListener("input", schedule);
   $("share").addEventListener("click", async () => {

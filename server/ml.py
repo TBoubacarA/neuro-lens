@@ -137,10 +137,14 @@ def describe(model, namespace: dict, override: dict | None = None) -> dict:
     if X is None:
         return {"ok": False, "error": "Définis les données dans une variable `X` (et `y` pour les réponses attendues).", "line": None}
     names = [str(c) for c in X.columns] if hasattr(X, "columns") else None
+    given = namespace.get("feature_names")  # noms des colonnes, si le code les donne
+    if names is None and isinstance(given, (list, tuple)):
+        names = [str(c) for c in given]
     X = np.asarray(X, dtype=float)
     if X.ndim == 1:
         X = X.reshape(-1, 1)
-    names = names or [f"x{i + 1}" for i in range(X.shape[1])]
+    if not names or len(names) != X.shape[1]:
+        names = [f"x{i + 1}" for i in range(X.shape[1])]
     y = namespace.get("y")
     y = None if y is None else np.asarray(y)
     task = _task(model)
