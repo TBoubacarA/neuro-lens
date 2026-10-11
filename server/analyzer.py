@@ -274,6 +274,7 @@ def train(code: str) -> dict:
     from server import trainer
 
     namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
+    torch.manual_seed(0)  # mêmes poids de départ à chaque analyse : les vues ne sautent pas d'un trait à l'autre
     try:
         exec(compile(code, FILENAME, "exec"), namespace)
         model = namespace.get("model")
@@ -284,9 +285,27 @@ def train(code: str) -> dict:
         return {"ok": False, "error": _explain(exc), "line": _error_line(exc)}
 
 
-def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None = None) -> dict:
+def dream(code: str) -> dict:
+    """Pour chaque chiffre, l'image que le réseau trouve la plus convaincante (voir server/trainer.py)."""
+    from server import trainer
+
+    namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
+    torch.manual_seed(0)  # mêmes poids de départ à chaque analyse : les vues ne sautent pas d'un trait à l'autre
+    try:
+        exec(compile(code, FILENAME, "exec"), namespace)
+        model = namespace.get("model")
+        if not isinstance(model, nn.Module):
+            return {"ok": False, "error": "Cette vue marche pour les réseaux PyTorch.", "line": None}
+        return trainer.dream(code, model)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": _explain(exc), "line": _error_line(exc)}
+
+
+def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None = None,
+            off: list[list[int]] | None = None) -> dict:
     """Point d'entrée : code Python -> description des couches et de leurs sorties."""
     namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
+    torch.manual_seed(0)  # mêmes poids de départ à chaque analyse : les vues ne sautent pas d'un trait à l'autre
     try:
         exec(compile(code, FILENAME, "exec"), namespace)
     except Exception as exc:  # noqa: BLE001 - toute erreur du code utilisateur est renvoyée
@@ -324,20 +343,37 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
     layers: list[dict] = []
     hooks = []
     producers: dict = {}  # opération PyTorch -> numéro de la couche qui l'a faite
+    leaf = None
     if x.is_floating_point():
-        x = x.clone().requires_grad_().clone()  # pour pouvoir suivre le trajet de l'entrée
+        leaf = x.clone().requires_grad_()  # pour suivre le trajet de l'entrée, et mesurer ce qui compte
+        x = leaf.clone()
         producers[x.grad_fn] = INPUT
+    silenced: dict[int, list[int]] = {}  # couche -> unités éteintes à la main dans la vue réseau
+    for layer_index, unit in off or []:
+        silenced.setdefault(layer_index, []).append(unit)
 
     def make_hook(name: str):
         def hook(module, inp, out):
             weights = None
+            raw = out
             if isinstance(module, nn.MultiheadAttention):
                 out, weights = out
-                if not module.batch_first:  # (tokens, lot, dimensions) -> (lot, tokens, dimensions)
-                    out = out.transpose(0, 1)
             if not isinstance(out, torch.Tensor):
-                return
+                return None
+            # « Et si ? » : on met à zéro les unités éteintes, et tout ce qui suit est recalculé sans elles.
+            axis = 1 if out.dim() == 4 or out.dim() == 2 else out.dim() - 1
+            dead = [u for u in silenced.get(len(layers), []) if 0 <= u < out.shape[axis]]
+            if dead:
+                out = out.clone()
+                out.index_fill_(axis, torch.tensor(dead), 0.0)
+                raw = (out, weights) if isinstance(module, nn.MultiheadAttention) else out
+            if isinstance(module, nn.MultiheadAttention) and not module.batch_first:
+                out = out.transpose(0, 1)  # (tokens, lot, dimensions) -> (lot, tokens, dimensions)
             preview = _preview(out)
+            if isinstance(module, nn.Conv2d):  # les filtres eux-mêmes : ce que chaque canal cherche
+                kernels = module.weight.detach()[:MAX_MAPS].mean(dim=1)
+                scale = kernels.abs().amax(dim=(1, 2), keepdim=True).clamp_min(1e-9)
+                preview["kernels"] = [[[round(v, 2) for v in row] for row in k] for k in (kernels / scale).tolist()]
             sources = _sources(inp, producers, x)
             if out.grad_fn is not None:
                 producers[out.grad_fn] = len(layers)
@@ -358,7 +394,9 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
                 "shape": list(out.shape),
                 "preview": preview,
                 "inputs": sources,
+                "off": dead,
             })
+            return raw if dead else None
         return hook
 
     def want_weights(_module, args, kwargs):
@@ -413,4 +451,11 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
             "probs": [round(p, 4) for p in probs.tolist()],
             "top": int(probs.argmax()),
         }
+        if leaf is not None and leaf.dim() == 4 and out.requires_grad:
+            # Carte de saillance : de combien la réponse bouge si on change chaque pixel.
+            out[0, int(probs.argmax())].backward()
+            grad = leaf.grad.abs().amax(dim=1)[0]
+            if max(grad.shape) > MAX_MAP_SIZE:
+                grad = nn.functional.adaptive_avg_pool2d(grad[None], MAX_MAP_SIZE)[0]
+            described["saliency"] = _normalize(grad)
     return result

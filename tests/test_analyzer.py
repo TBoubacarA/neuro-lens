@@ -316,3 +316,32 @@ def test_claude_agent_live_follows_the_model(monkeypatch):
     assert calls[0]["model"] == "claude-opus-5-5" and calls[0]["fallbacks"] == "default"
     results = [m["content"][0] for m in calls[2]["messages"] if m["role"] == "user" and isinstance(m["content"], list)]
     assert [(r["tool_use_id"], r["content"]) for r in results] == [("t1", "La tour Eiffel mesure 330 m."), ("t2", "33000")]
+
+
+def test_switching_units_off_changes_what_follows():
+    base = analyze(CNN)
+    cut = analyze(CNN, off=[[1, 0], [1, 3], [1, 99]])  # canaux 0 et 3 après le ReLU ; 99 n'existe pas
+    assert cut["ok"] and cut["layers"][1]["off"] == [0, 3] and cut["layers"][0]["off"] == []
+    relu = cut["layers"][1]["preview"]["maps"]
+    assert max(map(max, relu[0])) == 0 and max(map(max, relu[3])) == 0
+    assert cut["layers"][0]["preview"] == base["layers"][0]["preview"]  # avant la coupure : rien ne change
+    assert cut["layers"][-1]["preview"]["values"] != base["layers"][-1]["preview"]["values"]
+    assert [l["inputs"] for l in cut["layers"]] == [l["inputs"] for l in base["layers"]]
+
+
+def test_saliency_and_kernels():
+    res = analyze(CNN)
+    sal = res["input"]["saliency"]
+    assert len(sal) == 28 and len(sal[0]) == 28 and max(map(max, sal)) == 1.0
+    kernels = res["layers"][0]["preview"]["kernels"]
+    assert len(kernels) == 8 and len(kernels[0]) == 3 and max(abs(v) for row in kernels[0] for v in row) == 1.0
+    assert "saliency" not in analyze(TRANSFORMER)["input"]
+
+
+def test_dream_returns_one_image_per_digit():
+    from server.analyzer import dream
+
+    res = dream(CNN)
+    assert res["ok"] and len(res["images"]) == 10 and len(res["images"][0]) == 28
+    assert len(res["confidence"]) == 10 and res["epochs"] == 0
+    assert not dream(TRANSFORMER)["ok"]

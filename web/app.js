@@ -4,7 +4,7 @@ const DEBOUNCE_MS = 450;
 
 // Une phrase par type de couche, pour comprendre ce qu'on voit.
 const EXPLAIN = {
-  Conv2d: (p) => `Fait glisser ${p.out_channels} filtres ${fmtK(p.kernel_size)} sur l'image : chaque filtre produit une carte qui s'allume là où il reconnaît son motif.`,
+  Conv2d: (p) => `Fait glisser ${p.out_channels} filtres ${fmtK(p.kernel_size)} sur l'image : chaque filtre produit une carte qui s'allume là où il reconnaît son motif. Le petit carré sous chaque carte est le filtre lui-même (bleu = poids positif, rouge = négatif).`,
   MaxPool2d: (p) => `Garde la valeur la plus forte de chaque carré ${fmtK(p.kernel_size)} : l'image rétrécit mais les détails importants restent.`,
   AvgPool2d: (p) => `Fait la moyenne de chaque carré ${fmtK(p.kernel_size)} : l'image rétrécit en douceur.`,
   ReLU: () => "Remplace les valeurs négatives par 0 : seules les détections positives passent.",
@@ -39,6 +39,7 @@ let decorations = [];
 let timer = null;
 let requestId = 0;
 let lastLayers = [];
+let off = [];          // [couche, unité] éteintes à la main dans la vue réseau (« et si ? »)
 let lastShape = "";    // forme du dernier réseau affiché
 let lastResult = null; // pour rejouer la construction
 let otherKind = false; // le dernier affichage réussi n'était pas un réseau PyTorch
@@ -195,7 +196,7 @@ async function run(live = false) {
     const r = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: getCode(), pixels, text: $("text").value || null, live }),
+      body: JSON.stringify({ code: getCode(), pixels, text: $("text").value || null, off, live }),
     });
     res = await r.json();
   } catch (e) {
@@ -210,7 +211,7 @@ function renderOther(res) {
   lastLayers = [];
   lastShape = "";
   tokens = null;
-  ["input-card", "graph-card", "blocks-card", "depth-card", "train-card"].forEach((id) => { $(id).hidden = true; });
+  ["input-card", "graph-card", "blocks-card", "depth-card", "train-card", "dream-card"].forEach((id) => { $(id).hidden = true; });
   $("prediction").innerHTML = "";
   if (res.kind === "ml") {
     setStatus(`${res.estimator} · ${res.n_samples} exemples`, "ok");
@@ -239,6 +240,7 @@ function render(res) {
     // Le réseau a changé de forme (pas seulement le dessin) : on le reconstruit couche par couche.
     const shape = res.layers.map((l) => `${l.type}:${l.shape.join("x")}`).join("|");
     const build = shape !== lastShape;
+    if (build && lastShape && off.length) { off = []; lastShape = shape; return run(); } // autre réseau : on rallume tout
     lastShape = shape;
     lastResult = res;
     renderLayers(res.layers, null, build);
@@ -266,6 +268,8 @@ function renderInput(input) {
   $("text-input").hidden = !isText;
   $("pad-hint").hidden = $("pad-row").hidden = isText;
   $("input-shape").textContent = isText ? `${input.tokens.length} tokens` : fmtShape(input.shape);
+  $("saliency-box").hidden = !input.saliency;
+  if (input.saliency) paintSaliency(input.preview.maps[0], input.saliency);
   if (!isText) return;
   if (!$("text").value) $("text").value = input.text;
   $("tokens").innerHTML = "";
@@ -277,11 +281,35 @@ function renderInput(input) {
   });
 }
 
+// Éteint ou rallume une unité, puis recalcule tout ce qui en dépend.
+function toggleUnit(layer, unit) {
+  const at = off.findIndex(([l, u]) => l === layer && u === unit);
+  if (at >= 0) off.splice(at, 1); else off.push([layer, unit]);
+  run();
+}
+
+// Le dessin en gris, et par-dessus en orange les pixels qui pèsent le plus dans la réponse.
+function paintSaliency(image, saliency) {
+  const cv = $("saliency");
+  cv.width = saliency[0].length;
+  cv.height = saliency.length;
+  const ctx = cv.getContext("2d");
+  const data = ctx.createImageData(cv.width, cv.height);
+  saliency.flat().forEach((s, i) => {
+    const base = (image.flat()[i] ?? 0) * 70;
+    const hot = Math.pow(s, 0.6);
+    data.data.set([base + hot * (255 - base), base + hot * (150 - base), base * (1 - hot), 255], i * 4);
+  });
+  ctx.putImageData(data, 0, 0);
+}
+
 function renderNetwork(res, build) {
   const cols = columnsFromLayers(res.input, res.layers, res.prediction);
+  $("relight").hidden = !off.length;
+  $("relight").textContent = `Tout rallumer (${off.length})`;
   $("graph-card").hidden = false;
   $("graph-shape").textContent = `${cols.length} colonnes`;
-  renderGraph($("graph"), cols, highlightLine, revealLine, build);
+  renderGraph($("graph"), cols, highlightLine, revealLine, build, toggleUnit);
   $("blocks-card").hidden = false;
   const skips = renderBlocks($("blocks"), res, highlightLine, revealLine);
   $("blocks-shape").textContent = skips ? `${skips} raccourci${skips > 1 ? "s" : ""}` : "en ligne droite";
@@ -365,6 +393,7 @@ function previewEl(p) {
       m.flat().forEach((v, j) => data.data.set(heat(v), j * 4));
       ctx.putImageData(data, 0, 0);
       fig.appendChild(cv);
+      if (p.kernels?.[i]) fig.appendChild(kernelEl(p.kernels[i]));
       const cap = document.createElement("figcaption");
       cap.textContent = `canal ${i}`;
       fig.appendChild(cap);
@@ -389,6 +418,23 @@ function previewEl(p) {
     if (p.length > p.values.length) wrap.title = `${p.values.length} premières valeurs sur ${p.length}`;
   }
   return wrap;
+}
+
+// Le filtre lui-même : ses poids, bleu si positif, rouge si négatif.
+function kernelEl(kernel) {
+  const cv = document.createElement("canvas");
+  cv.className = "kernel";
+  cv.width = kernel[0].length;
+  cv.height = kernel.length;
+  cv.title = "Le filtre : bleu = poids positif, rouge = poids négatif";
+  const ctx = cv.getContext("2d");
+  const data = ctx.createImageData(cv.width, cv.height);
+  kernel.flat().forEach((v, j) => {
+    const a = Math.abs(v);
+    data.data.set(v >= 0 ? [28 + 63 * a, 33 + 107 * a, 48 + 207 * a, 255] : [28 + 227 * a, 33 + 74 * a, 48 + 59 * a, 255], j * 4);
+  });
+  ctx.putImageData(data, 0, 0);
+  return cv;
 }
 
 const tokenLabel = (i) => (tokens && tokens[i] !== undefined ? tokens[i] : `${i}`);
@@ -539,7 +585,8 @@ function renderPrediction(pred, training) {
 (async function main() {
   const select = $("examples");
   Object.keys(window.NEURO_EXAMPLES).forEach((name) => select.add(new Option(name, name)));
-  select.addEventListener("change", () => { $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
+  $("relight").addEventListener("click", () => { off = []; run(); });
+  select.addEventListener("change", () => { off = []; $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
   paintPad(seven());
   $("text").addEventListener("input", schedule);
   $("replay").addEventListener("click", () => {

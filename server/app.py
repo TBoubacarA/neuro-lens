@@ -23,15 +23,17 @@ LIVE_TIMEOUT_S = 120  # un agent piloté par un vrai modèle de langage attend s
 
 def _worker_loop(conn) -> None:
     from server import trainer
-    from server.analyzer import analyze, train
+    from server.analyzer import analyze, dream, train
 
     conn.send("ready")  # importer PyTorch peut prendre plusieurs secondes : hors du délai
     trainer.preload()
     while True:
-        op, code, pixels, text = conn.recv()
+        op, code, pixels, text, off = conn.recv()
         try:
             if op == "train":
                 conn.send(train(code))
+            elif op == "dream":
+                conn.send(dream(code))
             elif op == "live":  # le code peut appeler un vrai modèle de langage (voir l'exemple agent)
                 os.environ["NEURO_LENS_LIVE"] = "1"
                 try:
@@ -42,7 +44,7 @@ def _worker_loop(conn) -> None:
                 trainer.reset(code)
                 conn.send({"ok": True})
             else:
-                conn.send(analyze(code, pixels, text))
+                conn.send(analyze(code, pixels, text, off))
         except Exception as exc:  # noqa: BLE001
             conn.send({"ok": False, "error": str(exc), "line": None})
 
@@ -61,14 +63,14 @@ class Worker:
         self._proc.start()
         self._ready = False
 
-    def run(self, code: str, pixels, text=None, op: str = "analyze") -> dict:
+    def run(self, code: str, pixels, text=None, op: str = "analyze", off=None) -> dict:
         with self._lock:
             if not self._proc.is_alive():
                 self._start()
             if not self._ready:
                 self._conn.recv()
                 self._ready = True
-            self._conn.send((op, code, pixels, text))
+            self._conn.send((op, code, pixels, text, off))
             limit = LIVE_TIMEOUT_S if op == "live" else TIMEOUT_S
             if self._conn.poll(limit):
                 return self._conn.recv()
@@ -82,6 +84,7 @@ class AnalyzeRequest(BaseModel):
     code: str
     pixels: list[list[float]] | None = None
     text: str | None = None
+    off: list[list[int]] | None = None  # [couche, unité] éteintes à la main (« et si ? »)
     live: bool = False  # True : le code a le droit d'appeler un vrai modèle (payant)
 
 
@@ -100,7 +103,7 @@ app = FastAPI(title="neuro-lens", lifespan=lifespan)
 
 @app.post("/api/analyze")
 def analyze_endpoint(req: AnalyzeRequest) -> dict:
-    return worker.run(req.code, req.pixels, req.text, op="live" if req.live else "analyze")
+    return worker.run(req.code, req.pixels, req.text, op="live" if req.live else "analyze", off=req.off)
 
 
 class CodeRequest(BaseModel):
@@ -111,6 +114,12 @@ class CodeRequest(BaseModel):
 def train_endpoint(req: CodeRequest) -> dict:
     """Une époque d'entraînement ; les analyses suivantes de ce code montrent le réseau entraîné."""
     return worker.run(req.code, None, op="train")
+
+
+@app.post("/api/dream")
+def dream_endpoint(req: CodeRequest) -> dict:
+    """Pour chaque chiffre, l'image que le réseau trouve la plus convaincante."""
+    return worker.run(req.code, None, op="dream")
 
 
 @app.post("/api/reset")

@@ -122,3 +122,45 @@ def train(code: str, model: nn.Module) -> dict:
     _trained.clear()  # on ne garde que le dernier modèle entraîné
     _trained[code] = entry
     return {"ok": True, "training": summary(entry), "n_train": len(data["y"]), "n_test": len(data["y_test"])}
+
+
+DREAM_STEPS = 120
+
+
+def dream(code: str, model: nn.Module) -> dict:
+    """Ce que le réseau « imagine » pour chaque chiffre.
+
+    On part d'une image vide et on la modifie pas à pas pour que le score d'un chiffre monte le
+    plus possible. Le résultat montre ce que le réseau a retenu de chaque chiffre : du bruit s'il
+    n'a rien appris, des formes reconnaissables après l'entraînement.
+    """
+    reason = can_train(model)
+    if reason:
+        return {"ok": False, "error": reason, "line": None}
+    entry = _trained.get(code)
+    if entry:
+        model.load_state_dict(entry["state"])
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad_(False)
+    torch.manual_seed(0)
+    raw = (torch.randn(10, 1, 28, 28) * 0.1 - 2.0).requires_grad_()  # presque noir au départ
+    opt = torch.optim.Adam([raw], lr=0.15)
+    target = torch.arange(10)
+    for _ in range(DREAM_STEPS):
+        img = torch.sigmoid(raw)
+        # Le score du bon chiffre doit monter ; l'image doit rester sobre et lisse.
+        rough = (img[..., 1:, :] - img[..., :-1, :]).abs().mean() + (img[..., :, 1:] - img[..., :, :-1]).abs().mean()
+        loss = F.cross_entropy(model(img), target) + 0.6 * img.mean() + 0.8 * rough
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+    with torch.no_grad():
+        img = torch.sigmoid(raw)
+        probs = torch.softmax(model(img), dim=1)
+    return {
+        "ok": True,
+        "images": [[[round(v, 2) for v in row] for row in im[0]] for im in img.tolist()],
+        "confidence": [round(float(probs[i, i]), 3) for i in range(10)],
+        "epochs": len(entry["epochs"]) if entry else 0,
+    }

@@ -40,13 +40,15 @@ function columnsFromLayers(input, layers, prediction) {
     count: unitCount(input.shape, input.preview), values: unitValues(input.preview), link: null, line: null,
     maps: input.preview.maps, gray: true,
   }];
-  layers.forEach((l) => {
+  layers.forEach((l, index) => {
     const prev = cols[cols.length - 1];
     const count = unitCount(l.shape, l.preview);
     if (INLINE.has(l.type) && cols.length > 1 && count === prev.count) {
       prev.sub = `${prev.sub} → ${l.type}`;
       prev.values = unitValues(l.preview);
       prev.maps = l.preview.maps;
+      prev.layer = index; // éteindre une unité se fait après l'activation
+      prev.off = [...new Set([...prev.off, ...(l.off ?? [])])];
       return;
     }
     const family = FAMILY[l.type] ?? "other";
@@ -56,6 +58,7 @@ function columnsFromLayers(input, layers, prediction) {
       maps: l.preview.maps,
       link: family === "pool" && count === prev.count ? "one" : "full",
       line: l.line ?? null,
+      layer: index, off: l.off ?? [],
     });
   });
   if (prediction) {
@@ -93,7 +96,7 @@ function el(name, attrs, text) {
   return node;
 }
 
-function renderGraph(root, cols, onHover, onPick, build) {
+function renderGraph(root, cols, onHover, onPick, build, onToggle) {
   root.innerHTML = "";
   const g = GRAPH;
   const placed = cols.map((c, i) => {
@@ -153,8 +156,20 @@ function renderGraph(root, cols, onHover, onPick, build) {
         node.style.fillOpacity = v === undefined ? 0.35 : 0.25 + 0.75 * Math.min(1, v);
       }
       if (c.top === u) node.classList.add("top");
-      node.appendChild(el("title", {}, `${c.label} · unité ${u}${v === undefined ? "" : ` · activité ${v.toFixed(2)}`}`));
+      const dead = c.off?.includes(u);
+      const canToggle = onToggle && c.layer !== undefined && c.family !== "output";
+      node.appendChild(el("title", {}, `${c.label} · unité ${u}${v === undefined ? "" : ` · activité ${v.toFixed(2)}`}` +
+        (canToggle ? (dead ? " · éteinte : clique pour la rallumer" : " · clique pour l'éteindre") : "")));
       group.appendChild(node);
+      if (dead) { // une croix sur l'unité éteinte
+        node.classList.add("off");
+        const r = g.radius - 4;
+        group.appendChild(el("path", { d: `M${c.x - r},${y - r} L${c.x + r},${y + r} M${c.x + r},${y - r} L${c.x - r},${y + r}`, class: "graph-cross" }));
+      }
+      if (canToggle) {
+        node.classList.add("switch");
+        node.addEventListener("click", (e) => { e.stopPropagation(); onToggle(c.layer, u); });
+      }
       if (c.family === "output") group.appendChild(el("text", { x: c.x, y: y + 4, class: "graph-idx" }, u));
     });
     const base = g.padTop + g.radius * 2 + bodyH + 18;

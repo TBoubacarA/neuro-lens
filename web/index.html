@@ -38,6 +38,10 @@
             <button id="clear">Effacer</button>
             <button id="seven">Exemple « 7 »</button>
           </div>
+          <figure id="saliency-box" class="saliency" hidden>
+            <canvas id="saliency" width="28" height="28"></canvas>
+            <figcaption>Ce que le réseau regarde : en orange, les pixels qui pèsent le plus dans sa réponse.</figcaption>
+          </figure>
         </div>
       </div>
       <div class="card train-card" id="train-card" hidden>
@@ -58,9 +62,10 @@
         <div class="card-head">
           <span class="tag tag-input">Vue réseau</span>
           <button id="replay" class="small" title="Rejouer la construction couche par couche">▶ Rejouer la construction</button>
+          <button id="relight" class="small" hidden>Tout rallumer</button>
           <span class="shape" id="graph-shape"></span>
         </div>
-        <p class="hint">Chaque rond est un neurone, chaque vignette un canal qui montre ce qu'il voit de ton dessin ; chaque flèche est une connexion. Plus un rond est lumineux, plus il est actif. Le nombre de nœuds est celui écrit dans le code (au-delà de 16, « ⋮ » résume la suite). Survole une colonne pour retrouver sa ligne de code.</p>
+        <p class="hint">Chaque rond est un neurone, chaque vignette un canal qui montre ce qu'il voit de ton dessin ; chaque flèche est une connexion. Plus un rond est lumineux, plus il est actif. Le nombre de nœuds est celui écrit dans le code (au-delà de 16, « ⋮ » résume la suite). Survole une colonne pour retrouver sa ligne de code. <b>Et si ?</b>&nbsp;Clique sur un nœud pour l'éteindre : tout ce qui suit est recalculé sans lui, jusqu'à la prédiction.</p>
         <div id="graph" class="graph"></div>
       </div>
       <div class="card graph-card" id="blocks-card" hidden>
@@ -70,6 +75,18 @@
         </div>
         <p class="hint">Le trajet réel des données, de haut en bas. Deux boîtes côte à côte travaillent en parallèle ; une flèche qui contourne des boîtes est un raccourci (connexion résiduelle) ; ⊕ marque l'endroit où deux chemins s'additionnent ou se combinent.</p>
         <div id="blocks" class="graph"></div>
+      </div>
+      <div class="card train-card" id="dream-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Ce que le réseau imagine</span>
+          <span class="shape" id="dream-shape"></span>
+        </div>
+        <p class="hint">On part d'une image noire et on la retouche jusqu'à ce que le réseau soit sûr d'y voir un 0, puis un 1, un 2… Avant l'entraînement c'est du bruit ; après, on voit ce qu'il a retenu de chaque chiffre. Refais-le après quelques époques pour comparer.</p>
+        <div class="train-actions">
+          <button id="dream-go">Montrer ce qu'il imagine</button>
+          <span id="dream-status" class="meta"></span>
+        </div>
+        <div id="dreams" class="dreams"></div>
       </div>
       <div class="card graph-card" id="depth-card" hidden>
         <div class="card-head">
@@ -92,6 +109,7 @@
   <script src="/static/agents.js"></script>
   <script src="/static/depth.js"></script>
   <script src="/static/train.js"></script>
+  <script src="/static/dream.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

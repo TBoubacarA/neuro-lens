@@ -31,6 +31,10 @@ Ce que la page montre dépend de ce que le code définit :
   - une grille par tête d'attention : qui regarde qui ;
   - choix du routeur dans un mélange d'experts (MoE).
 - **Prédiction** finale sous forme de barres.
+- **Et si ?** : clique sur un nœud de la vue réseau pour l'éteindre ; tout ce qui suit est recalculé sans lui.
+- **Ce que le réseau regarde** : à côté du dessin, les pixels qui pèsent le plus dans la réponse.
+- **Les filtres** : sous chaque carte d'activation, les poids du filtre qui l'a produite.
+- **Ce que le réseau imagine** : pour chaque chiffre, l'image qui le convainc le plus (à refaire après l'entraînement).
 - **Entraînement en direct** : le bouton « Entraîner » fait apprendre le réseau sur 1 437 vrais chiffres manuscrits (load_digits de scikit-learn, rien à télécharger). Une courbe montre l'erreur baisser, le taux de réussite sur des chiffres jamais vus s'affiche après chaque époque, et toutes les vues passent aux poids appris.
 
 Tant qu'on n'a pas cliqué sur « Entraîner », les poids sont aléatoires, mais les formes, les filtres et le trajet des données sont réels.

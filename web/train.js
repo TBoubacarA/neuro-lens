@@ -6,6 +6,7 @@ let training = false;
 function renderTraining(res) {
   const card = document.getElementById("train-card");
   card.hidden = !res.trainable;
+  document.getElementById("dream-card").hidden = !res.trainable;
   if (!res.trainable) return;
   drawTraining(res.training);
 }
