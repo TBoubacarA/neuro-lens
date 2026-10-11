@@ -273,7 +273,10 @@ def _torch(code: str, result: dict) -> list[dict]:
     files.append(_file("tests/test_model.py", "Les tests : la forme de la sortie et le nombre de paramètres ne doivent pas changer par accident.", TEST_TORCH.format(
         input_shape=result["input"]["shape"], output_shape=shape, n_params=result["n_params"], dtype=", dtype=torch.long" if text else "",
     )))
-    files += _common(f"torch=={torch.__version__.split('+')[0]}\n")
+    import numpy as np
+
+    # numpy : PyTorch tourne sans, mais affiche un avertissement à chaque démarrage
+    files += _common(f"torch=={torch.__version__.split('+')[0]}\nnumpy=={np.__version__}\n")
     files.append(_readme("Projet réseau de neurones", f"Un réseau PyTorch de {len(result['layers'])} couches et {result['n_params']:,} paramètres.".replace(",", " "), files, "python src/model.py         # construire le réseau"))
     return files
 
