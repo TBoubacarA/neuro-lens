@@ -32,7 +32,8 @@ function drawTree() {
   const walk = (nodes, depth) => {
     nodes.forEach((n) => {
       const row = document.createElement("div");
-      row.className = `tree-row ${n.kind}${proj.open && proj.open.path === n.path ? " on" : ""}`;
+      const isMain = proj.root === "code" && n.path === proj.data.main; // le fichier qu'on édite
+      row.className = `tree-row ${n.kind}${proj.open && proj.open.path === n.path ? " on" : ""}${isMain ? " main" : ""}${isMain && !window.projectMode ? " on" : ""}`;
       row.style.paddingLeft = `${8 + depth * 14}px`;
       row.title = n.role + (n.why ? `\n${n.why}` : "");
       const isOpen = n.kind === "dir" && proj.openDirs.has(n.path);
@@ -49,9 +50,55 @@ function drawTree() {
     });
   };
   walk(proj.data.tree, 0);
+  $("workspace-actions").hidden = proj.root !== "code";
+  const here = proj.data.roots.find((x) => x.id === proj.root);
+  $("project-path").textContent = here ? here.path : "";
 }
 
+// Après chaque analyse : le projet autour du code vient d'être mis à jour sur le disque.
+let workspaceShown = false;
+async function projectRefresh(workspace) {
+  if (!workspace || window.projectMode) return;
+  const side = $("explorer");
+  if (!workspaceShown) { // première analyse : on ouvre l'explorateur sur « ton projet »
+    workspaceShown = true;
+    proj.root = "code";
+    proj.openDirs = new Set(["src", "tests", "service"]);
+    side.hidden = false;
+    $("project-btn").classList.add("on");
+  }
+  if (!side.hidden && proj.root === "code") await loadProject("code");
+}
+
+async function workspaceAction(path, busy) {
+  const out = $("workspace-output");
+  out.hidden = false;
+  out.className = "workspace-output";
+  out.textContent = busy;
+  let res;
+  try {
+    res = await (await fetch(path, { method: "POST" })).json();
+  } catch (e) {
+    res = { ok: false, error: "Le serveur ne répond pas." };
+  }
+  return [out, res];
+}
+
+async function workspaceTests() {
+  const [out, res] = await workspaceAction("/api/workspace/test", "$ pytest…");
+  out.className = `workspace-output ${res.ok && res.passed ? "ok" : "bad"}`;
+  out.textContent = res.ok ? `$ pytest\n${res.output}` : res.error;
+}
+
+async function workspaceOpen() {
+  const [out, res] = await workspaceAction("/api/workspace/open", "Ouverture…");
+  out.className = `workspace-output ${res.ok ? "ok" : "bad"}`;
+  out.textContent = res.ok ? `Ouvert dans VS Code :\n${res.folder}` : res.error;
+}
+
+
 async function openFile(node) {
+  if (proj.root === "code" && proj.data && node.path === proj.data.main) return closeFile(); // c'est le code de l'éditeur
   const r = await fetch(`/api/project/file?root=${encodeURIComponent(proj.root)}&path=${encodeURIComponent(node.path)}`);
   const info = await r.json();
   if (!info.ok) { setStatus(info.error, "err"); return; }
@@ -210,4 +257,6 @@ function moduleGraph(g, current) {
 (() => {
   $("project-btn").addEventListener("click", toggleExplorer);
   $("project-root").addEventListener("change", (e) => { loadProject(e.target.value); });
+  $("workspace-test").addEventListener("click", workspaceTests);
+  $("workspace-open").addEventListener("click", workspaceOpen);
 })();

@@ -471,3 +471,14 @@ input.ops-drift { width: 160px; display: inline-block; margin: 0; }
 .outline span { color: var(--muted); overflow-wrap: anywhere; }
 .proj-lines { text-anchor: middle; fill: var(--muted); font-size: 9.5px; }
 .agent-node.test rect { stroke-dasharray: 4 3; }
+
+.tree-row.main .tree-name { color: var(--accent); font-weight: 700; }
+.workspace-actions { display: flex; flex-direction: column; gap: 5px; padding: 8px; border-top: 1px solid var(--border); }
+.workspace-actions[hidden] { display: none; }
+.workspace-actions p { margin: 0 0 2px; font-size: 11px; }
+.workspace-actions button { text-align: left; }
+.workspace-output { margin: 2px 0 0; font: 10.5px/1.45 ui-monospace, Menlo, monospace; color: var(--muted); max-height: 150px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.workspace-output.ok { color: var(--ok); }
+.workspace-output.bad { color: #ffb4b4; }
+.project-path { padding: 6px 8px; border-top: 1px solid var(--border); font: 10px ui-monospace, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+body { overflow: hidden; } /* seuls les panneaux défilent, jamais la page */

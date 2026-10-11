@@ -87,6 +87,16 @@ ANTHROPIC_API_KEY=sk-ant-... python -m server.app
 
 Le modèle n'est appelé que sur ce clic (jamais pendant la frappe), car chaque passage est payant. Sans clé, une règle fixe joue son rôle.
 
+### Ton projet, comme dans VS Code
+
+L'explorateur à gauche de l'éditeur s'ouvre sur « ton projet » : le dépôt complet qu'aurait ton code en production, écrit pour de bon dans `.neuro-lens/projet/` et tenu à jour à chaque modification.
+
+- `src/` : ton code (le seul fichier que tu édites) ; `tests/` : des tests générés à partir de l'analyse ; `requirements.txt`, `.github/workflows/tests.yml`, `README.md`, `.gitignore`.
+- Pour un modèle scikit-learn déployé, `service/` : `serve.py`, le modèle figé, sa fiche, le `Dockerfile` — l'unité qu'on déploie.
+- Un clic sur un fichier l'ouvre en lecture, avec son rôle et son plan ; « Lancer les tests du projet » exécute `pytest` dans ce dossier ; « Ouvrir dans VS Code » l'ouvre dans l'éditeur.
+
+Le menu de l'explorateur donne aussi accès à neuro-lens lui-même et à chaque version déployée.
+
 ## Lancer
 
 ```bash
@@ -124,6 +134,7 @@ server/
   infra.py     construit l'image Docker d'une version et lance son conteneur
   agents.py    agents LangGraph
   project.py   vue Projet : arborescence, rôle des fichiers, plan, graphe des modules
+  workspace.py le projet autour du code de l'éditeur : fichiers générés, tests, ouverture dans VS Code
   llmops.py    trace des agents, tokens et coût, garde-fou, évaluation sur un jeu de cas
 tests/
 ```

@@ -140,11 +140,23 @@ def graph(base: Path, package: str = "server") -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
+CODE_FOLDERS = {
+    "src": "Le code du projet : ce que tu écris.",
+    "tests": "Les tests automatiques : ils protègent le code des régressions, sur ta machine et sur GitHub.",
+    "service": "L'unité qu'on déploie : le service, le modèle figé, sa fiche, la recette de l'image. Rien d'autre ne part en production.",
+    ".github": "Ce que GitHub exécute tout seul : l'intégration continue.",
+    ".github/workflows": "Un fichier par automatisme ; ici, lancer les tests à chaque push.",
+}
+
+
 def roots() -> list[dict]:
     """Les projets qu'on peut ouvrir : neuro-lens, puis chaque version mise en production."""
     out = [{"id": "app", "name": "neuro-lens (ce projet)", "path": str(ROOT)}]
     try:
-        from server import mlops
+        from server import mlops, workspace
+
+        if workspace.folder().is_dir():  # le projet autour du code de l'éditeur, tenu à jour à chaque analyse
+            out.insert(0, {"id": "code", "name": "ton projet (autour de ton code)", "path": str(workspace.folder())})
 
         for folder in sorted((mlops.home() / "models").glob("v*"), key=lambda p: int(p.name[1:]) if p.name[1:].isdigit() else 0):
             if folder.is_dir():
@@ -162,7 +174,20 @@ def describe(root_id: str = "app") -> dict:
     base = _base(root_id)
     if base is None:
         return {"ok": False, "error": f"Projet inconnu : {root_id}"}
-    return {"ok": True, "root": root_id, "roots": roots(), "tree": tree(base), "graph": graph(base) if root_id == "app" else {"nodes": [], "edges": []}}
+    out = {"ok": True, "root": root_id, "roots": roots(), "tree": tree(base), "graph": graph(base) if root_id == "app" else {"nodes": [], "edges": []}}
+    if root_id == "code":  # ici chaque fichier a un rôle précis, écrit par l'analyse (server/workspace.py)
+        from server import workspace
+
+        known = workspace.roles()
+        out["main"] = known.get("main")
+
+        def label(nodes: list[dict]) -> None:
+            for node in nodes:
+                node["role"] = known.get("roles", {}).get(node["path"], CODE_FOLDERS.get(node["path"], node["role"]))
+                label(node.get("children", []))
+
+        label(out["tree"])
+    return out
 
 
 def read(root_id: str, rel: str) -> dict:
@@ -178,7 +203,12 @@ def read(root_id: str, rel: str) -> dict:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return {"ok": True, "path": rel, "binary": True, "size": path.stat().st_size, "role": role_of(rel, path)}
-    out = {"ok": True, "path": rel, "text": text, "role": role_of(rel, path), "lines": text.count("\n") + 1}
+    role = role_of(rel, path)
+    if root_id == "code":
+        from server import workspace
+
+        role = workspace.roles().get("roles", {}).get(rel, role)
+    out = {"ok": True, "path": rel, "text": text, "role": role, "lines": text.count("\n") + 1}
     if path.suffix == ".py":
         out["imports"] = imports_of(path, "server")
         out["symbols"] = _symbols(text)

@@ -242,6 +242,17 @@ def _group_lines(code: str, model: nn.Module, layers: list[dict]) -> None:
             layer["line"] = line
 
 
+def _sync_project(code: str, result: dict) -> None:
+    """Tient à jour, sur le disque, le projet complet autour du code (voir server/workspace.py)."""
+    from server import workspace
+
+    if result.get("ok"):
+        try:
+            result["workspace"] = workspace.sync(workspace.build(code, result))
+        except Exception:  # noqa: BLE001 - l'explorateur ne doit jamais faire échouer l'analyse
+            result["workspace"] = None
+
+
 def _other_kinds(code: str, namespace: dict, override: dict | None = None) -> dict:
     """Ce qui n'est pas un réseau PyTorch : un modèle scikit-learn ou un agent LangGraph."""
     from server import agents, ml
@@ -276,6 +287,7 @@ def _other_kinds(code: str, namespace: dict, override: dict | None = None) -> di
         return {"ok": False, "error": _explain(exc), "line": _error_line(exc)}
     match = re.search(rf"^{name}\s*=", code, re.M)
     result["line"] = code[: match.start()].count("\n") + 1 if match else None
+    _sync_project(code, result)
     return result
 
 
@@ -512,4 +524,5 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
             if max(grad.shape) > MAX_MAP_SIZE:
                 grad = nn.functional.adaptive_avg_pool2d(grad[None], MAX_MAP_SIZE)[0]
             described["saliency"] = _normalize(grad)
+    _sync_project(code, result)
     return result

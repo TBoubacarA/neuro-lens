@@ -22,6 +22,13 @@
       <aside id="explorer" class="explorer" hidden>
         <select id="project-root" aria-label="Projet"></select>
         <div id="project-tree" class="project-tree"></div>
+        <div id="workspace-actions" class="workspace-actions" hidden>
+          <p class="meta">Ce projet est écrit pour de bon sur ton disque et suit ton code à chaque modification.</p>
+          <button id="workspace-test" class="small" title="Lance pytest dans le dossier du projet">▶ Lancer les tests du projet</button>
+          <button id="workspace-open" class="small" title="Ouvre le dossier du projet dans VS Code">Ouvrir dans VS Code</button>
+          <pre id="workspace-output" class="workspace-output" hidden></pre>
+        </div>
+        <div id="project-path" class="project-path" title="Emplacement du projet sur le disque"></div>
       </aside>
       <div class="editor-col">
         <div id="tabs" class="tabs" hidden></div>

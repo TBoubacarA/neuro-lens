@@ -570,3 +570,58 @@ def test_project_view_lists_files_with_roles_and_dependencies(tmp_path, monkeypa
     with TestClient(app_module.app) as client:
         assert client.get("/api/project").json()["ok"]
         assert client.get("/api/project/file", params={"root": "app", "path": "README.md"}).json()["lines"] > 50
+
+
+def test_workspace_around_the_code_is_real_and_its_tests_pass(tmp_path, monkeypatch):
+    from server import mlops, project, workspace
+    from server.analyzer import deploy
+
+    monkeypatch.setenv("NEURO_LENS_HOME", str(tmp_path))
+    monkeypatch.setattr(mlops, "_runs", [])
+    monkeypatch.setattr(mlops, "_prod", None)
+    monkeypatch.setattr(mlops, "_events", [])
+
+    # Avant tout déploiement : le code, ses tests, ses dépendances, la CI
+    first = analyze(TREE)
+    files = {f["path"]: f for f in workspace.build(TREE, first)}
+    assert first["workspace"]["main"] == "src/train.py"
+    assert files["src/train.py"]["content"] == TREE and files["src/train.py"]["main"]
+    assert {"tests/test_train.py", "requirements.txt", ".github/workflows/tests.yml", "README.md"} <= set(files)
+    assert "service/serve.py" not in files and all(f["role"] for f in files.values())
+
+    # Après : le modèle, sa fiche, le service et le Dockerfile rejoignent le projet
+    deploy(TREE)
+    res = analyze(TREE)
+    paths = [f["path"] for f in workspace.build(TREE, res)]
+    assert {"service/model.joblib", "service/model_card.json", "service/serve.py", "service/Dockerfile"} <= set(paths)
+    assert paths[0] == "src/train.py"
+
+    # Écrit sur le disque, le projet tient debout : ses propres tests passent
+    root = tmp_path / "projet"
+    assert res["workspace"]["written"] == len(paths) and (root / "service/model.joblib").stat().st_size > 500
+    assert (root / "src/train.py").read_text() == TREE
+    tests = workspace.run_tests()
+    assert tests["passed"], tests["output"]
+
+    # Le dossier service/ se suffit à lui-même : son serve.py trouve son modèle
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("serve_projet", root / "service" / "serve.py")
+    serve = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(serve)
+    with TestClient(serve.app) as client:
+        assert client.get("/health").json()["status"] == "ok"
+
+    # La vue Projet le montre comme une racine de plus, avec le rôle précis de chaque fichier
+    seen = project.describe("code")
+    assert seen["ok"] and seen["main"] == "src/train.py" and seen["roots"][0]["id"] == "code"
+    service = next(n for n in seen["tree"] if n["path"] == "service")
+    assert "déploie" in service["role"] and "version 1" in next(c for c in service["children"] if c["name"] == "model.joblib")["role"]
+    assert "seuil de qualité" in project.read("code", "tests/test_train.py")["role"]
+
+    # Les autres familles ont aussi leur projet ; l'ancien est remplacé, sans restes
+    assert analyze(CNN)["workspace"]["main"] == "src/model.py"
+    assert not (root / "service").exists() and not (root / "src/train.py").exists()
+    assert workspace.run_tests()["passed"]
+    assert analyze(AGENT)["workspace"]["main"] == "src/agent.py"
+    assert workspace.run_tests()["passed"]
