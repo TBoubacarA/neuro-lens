@@ -305,6 +305,39 @@ def project_file_endpoint(root: str = "app", path: str = "") -> dict:
     return project.read(root, path)
 
 
+class PanneStart(BaseModel):
+    code: str
+    exclude: list[str] = []
+
+
+class PanneGuess(BaseModel):
+    id: str
+    cause: str = ""
+    code: str = ""
+
+
+@app.post("/api/panne/start")
+def panne_start_endpoint(req: PanneStart) -> dict:
+    """Mode panne : glisse une faute dans le code ; l'apprenant doit la reconnaître aux symptômes."""
+    from server import pannes
+
+    return pannes.start(req.code, req.exclude)
+
+
+@app.post("/api/panne/guess")
+def panne_guess_endpoint(req: PanneGuess) -> dict:
+    from server import pannes
+
+    return pannes.guess(req.id, req.cause, req.code)
+
+
+@app.post("/api/panne/reveal")
+def panne_reveal_endpoint(req: PanneGuess) -> dict:
+    from server import pannes
+
+    return pannes.reveal(req.id, req.code)
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")
