@@ -224,6 +224,7 @@ function renderOther(res) {
   if (res.kind === "ml") {
     setStatus(`${res.estimator} · ${res.n_samples} exemples`, "ok");
     renderML($("layers"), res, highlightLine, revealLine, (name, value) => { mlOverride = { [name]: value }; run(); });
+    renderMLOps($("layers"), res, { code: getCode, override: () => mlOverride });
   } else {
     setStatus(`agent · ${res.steps.length} passage${res.steps.length > 1 ? "s" : ""}`, res.stopped ? "err" : "ok");
     renderAgent($("layers"), res, highlightLine, revealLine, () => run(true));
