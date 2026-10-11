@@ -21,7 +21,9 @@ TIME_BUDGET_S = 7.0  # une époque doit tenir dans la limite de 10 s du serveur
 
 _data: dict | None = None
 _lock = threading.Lock()
-_trained: dict = {}  # code -> {"state", "opt", "losses", "epochs": [{"epoch", "train_acc", "test_acc"}]}
+_trained: dict = {}  # code -> {"state", "states", "opt", "losses", "epochs": [...], "eval": {...}}
+MAX_STATES = 40  # poids gardés époque par époque, pour revoir l'apprentissage
+MAX_MISTAKES = 12
 
 
 def preload() -> None:
@@ -60,17 +62,43 @@ def can_train(model: nn.Module) -> str | None:
     return None
 
 
-def apply(code: str, model: nn.Module) -> dict | None:
-    """Recharge les poids appris pour ce code, s'il y en a. Renvoie le résumé de l'entraînement."""
+def apply(code: str, model: nn.Module, epoch: int | None = None) -> dict | None:
+    """Recharge les poids appris pour ce code, s'il y en a : les derniers, ou ceux après `epoch` époques."""
     entry = _trained.get(code)
     if entry is None:
         return None
-    model.load_state_dict(entry["state"])
-    return summary(entry)
+    shown = len(entry["epochs"])
+    if epoch is not None and 0 <= epoch < len(entry["states"]):
+        shown = epoch
+        model.load_state_dict(entry["states"][epoch])
+    else:
+        model.load_state_dict(entry["state"])
+    return {**summary(entry), "shown": shown}
 
 
 def summary(entry: dict) -> dict:
-    return {"epochs": entry["epochs"], "losses": entry["losses"]}
+    return {"epochs": entry["epochs"], "losses": entry["losses"], "eval": entry.get("eval"), "kept": len(entry["states"])}
+
+
+def _snapshot(model: nn.Module) -> dict:
+    return {k: v.detach().clone() for k, v in model.state_dict().items()}
+
+
+def _evaluate(model: nn.Module, data: dict) -> dict:
+    """Matrice de confusion sur les chiffres jamais vus, et quelques-uns de ceux qu'il rate."""
+    model.eval()
+    with torch.no_grad():
+        pred = model(data["x_test"]).argmax(dim=1)
+    y = data["y_test"]
+    confusion = torch.zeros(10, 10, dtype=torch.long)
+    for t, p in zip(y.tolist(), pred.tolist()):
+        confusion[t, p] += 1
+    wrong = (pred != y).nonzero().flatten()[:MAX_MISTAKES]
+    mistakes = [
+        {"true": int(y[i]), "pred": int(pred[i]), "image": [[round(v, 2) for v in row] for row in data["x_test"][i, 0].tolist()]}
+        for i in wrong.tolist()
+    ]
+    return {"confusion": confusion.tolist(), "mistakes": mistakes, "n_wrong": int((pred != y).sum()), "n_test": len(y)}
 
 
 def reset(code: str) -> None:
@@ -94,7 +122,7 @@ def train(code: str, model: nn.Module) -> dict:
         model.load_state_dict(entry["state"])
         opt.load_state_dict(entry["opt"])
     else:
-        entry = {"losses": [], "epochs": []}
+        entry = {"losses": [], "epochs": [], "states": [_snapshot(model)]}  # états[0] : avant d'apprendre
 
     model.train()
     g = torch.Generator().manual_seed(len(entry["epochs"]))
@@ -117,7 +145,10 @@ def train(code: str, model: nn.Module) -> dict:
         "train_acc": _accuracy(model, data["x"], data["y"]),
         "test_acc": _accuracy(model, data["x_test"], data["y_test"]),
     })
-    entry["state"] = {k: v.detach().clone() for k, v in model.state_dict().items()}
+    entry["state"] = _snapshot(model)
+    if len(entry["states"]) < MAX_STATES:
+        entry["states"].append(entry["state"])
+    entry["eval"] = _evaluate(model, data)
     entry["opt"] = opt.state_dict()
     _trained.clear()  # on ne garde que le dernier modèle entraîné
     _trained[code] = entry

@@ -302,7 +302,7 @@ def dream(code: str) -> dict:
 
 
 def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None = None,
-            off: list[list[int]] | None = None) -> dict:
+            off: list[list[int]] | None = None, epoch: int | None = None) -> dict:
     """Point d'entrée : code Python -> description des couches et de leurs sorties."""
     namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
     torch.manual_seed(0)  # mêmes poids de départ à chaque analyse : les vues ne sautent pas d'un trait à l'autre
@@ -321,7 +321,7 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
     from server import trainer
 
     try:
-        training = trainer.apply(code, model)  # poids appris avec le bouton « Entraîner », s'il y en a
+        training = trainer.apply(code, model, epoch)  # poids appris avec « Entraîner » : les derniers, ou ceux après `epoch` époques
     except RuntimeError:
         training = None
 

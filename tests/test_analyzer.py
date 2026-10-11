@@ -261,7 +261,15 @@ def test_training_improves_and_is_reused_by_analysis():
     accs = [e["test_acc"] for e in last["training"]["epochs"]]
     assert len(accs) == 3 and accs[-1] > 0.5 and accs[-1] > accs[0]
     res = analyze(code)
-    assert res["trainable"] and len(res["training"]["epochs"]) == 3
+    assert res["trainable"] and len(res["training"]["epochs"]) == 3 and res["training"]["shown"] == 3
+    ev = res["training"]["eval"]  # matrice de confusion sur les chiffres jamais vus, et ses erreurs
+    assert sum(ev["confusion"][i][i] for i in range(10)) + ev["n_wrong"] == ev["n_test"] == first["n_test"]
+    assert all(m["true"] != m["pred"] and len(m["image"]) == 28 for m in ev["mistakes"])
+    # Revoir l'apprentissage : les poids après 1 époque donnent la réussite notée à l'époque 1
+    before = analyze(code, epoch=0)
+    assert before["training"]["shown"] == 0 and before["training"]["kept"] == 4
+    assert analyze(code, epoch=1)["training"]["shown"] == 1
+    assert analyze(code, epoch=1)["prediction"] != analyze(code, epoch=3)["prediction"]
     trainer.reset(code)
     assert analyze(code)["training"] is None
     assert not train(TRANSFORMER)["ok"]  # texte : pas d'entraînement sur les chiffres

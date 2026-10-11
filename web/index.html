@@ -11,6 +11,7 @@
   <header>
     <div class="brand"><span class="dot"></span>neuro-lens</div>
     <select id="examples" aria-label="Exemples"></select>
+    <button id="share" class="small" title="Copier un lien qui contient ce code">Partager</button>
     <span id="status" class="status">…</span>
   </header>
 
@@ -57,6 +58,12 @@
           <span id="train-status" class="meta"></span>
         </div>
         <div id="train-chart"></div>
+        <div class="epoch-row" id="epoch-row" hidden>
+          <label for="epoch-range">Revoir l'apprentissage :</label>
+          <input id="epoch-range" type="range" min="0" max="0" value="0">
+          <span id="epoch-label" class="meta"></span>
+        </div>
+        <div id="train-eval"></div>
       </div>
       <div class="card graph-card" id="graph-card" hidden>
         <div class="card-head">

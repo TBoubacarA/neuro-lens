@@ -45,6 +45,7 @@ let lastResult = null; // pour rejouer la construction
 let otherKind = false; // le dernier affichage réussi n'était pas un réseau PyTorch
 let lastInput = null; // aperçu de l'entrée, pour montrer son découpage en patchs
 let tokens = null;   // mots de la phrase d'entrée, quand le modèle lit du texte
+let shownEpoch = null; // null = les derniers poids appris ; sinon le réseau après N époques
 
 // ---------- Éditeur ----------
 
@@ -196,7 +197,7 @@ async function run(live = false) {
     const r = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: getCode(), pixels, text: $("text").value || null, off, live }),
+      body: JSON.stringify({ code: getCode(), pixels, text: $("text").value || null, off, live, epoch: shownEpoch }),
     });
     res = await r.json();
   } catch (e) {
@@ -580,6 +581,10 @@ function renderPrediction(pred, training) {
     </div>`;
 }
 
+// Un lien qui contient le code : base64 compatible avec les accents.
+const toBase64 = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const fromBase64 = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)));
+
 // ---------- Démarrage ----------
 
 (async function main() {
@@ -589,11 +594,18 @@ function renderPrediction(pred, training) {
   select.addEventListener("change", () => { off = []; $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
   paintPad(seven());
   $("text").addEventListener("input", schedule);
+  $("share").addEventListener("click", async () => {
+    const url = `${location.origin}${location.pathname}#code=${toBase64(getCode())}`;
+    history.replaceState(null, "", url);
+    try { await navigator.clipboard.writeText(url); setStatus("lien copié", "ok"); }
+    catch (e) { setStatus("lien dans la barre d'adresse", "ok"); }
+  });
   $("replay").addEventListener("click", () => {
     if (!lastResult) return;
     renderLayers(lastResult.layers, null, true);
     renderNetwork(lastResult, true);
   });
-  await initEditor(window.NEURO_EXAMPLES[select.value]);
+  const shared = new URLSearchParams(location.hash.slice(1)).get("code");
+  await initEditor(shared ? fromBase64(shared) : window.NEURO_EXAMPLES[select.value]);
   run();
 })();
