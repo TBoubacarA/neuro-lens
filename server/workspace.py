@@ -205,7 +205,11 @@ def _vscode() -> str:
 
 
 def _common(requirements: str) -> list[dict]:
-    needs = f"# Python {_python()} ou plus récent : ces versions n'existent pas pour un Python plus ancien.\n"
+    needs = (
+        f"# Python {_python()} ou plus récent : ces versions n'existent pas pour un Python plus ancien.\n"
+        "# Ce fichier suffit pour faire tourner le projet. Pour lancer les tests (pytest) :\n"
+        "#   pip install -r requirements-dev.txt\n"
+    )
     return [
         _file("requirements.txt", "Les bibliothèques dont le projet a besoin, avec leur version : même installation partout.", needs + requirements),
         _file("requirements-dev.txt", "Les outils en plus pour développer et tester (pytest), inutiles en production.", "-r requirements.txt\npytest\n"),
