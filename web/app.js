@@ -644,7 +644,7 @@ const fromBase64 = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replac
   const families = [
     ["MLOps : jusqu'en production", (n) => n.startsWith("MLOps")],
     ["ML classique (scikit-learn)", (n) => n.startsWith("ML classique")],
-    ["Agents, LLMOps, AgentOps", (n) => n.startsWith("Agent")],
+    ["Agents, LLMOps, AgentOps", (n) => n.startsWith("Agent") || n.startsWith("LLMOps")],
     ["Réseaux de neurones (PyTorch)", () => true],
   ];
   const groups = new Map(families.map(([label]) => [label, Object.assign(document.createElement("optgroup"), { label })]));
