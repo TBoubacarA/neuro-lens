@@ -13,6 +13,8 @@
     <select id="examples" aria-label="Exemples"></select>
     <button id="to-ops" class="small to-ops" hidden title="Essais, versions, image Docker, API, surveillance">Chaîne MLOps ↓</button>
     <button id="share" class="small" title="Copier un lien qui contient ce code">Partager</button>
+    <button id="defi-btn" class="small" title="Prédis les formes et les paramètres avant que l'outil les montre">Mode défi</button>
+    <button id="parcours-btn" class="small" title="Le parcours expert : 8 niveaux, avec les preuves de ce que tu as réussi">Parcours</button>
     <button id="project-btn" class="small" title="Les fichiers du projet, leur rôle et leurs dépendances">Projet</button>
     <span id="status" class="status">…</span>
   </header>
@@ -43,6 +45,15 @@
          aria-label="Largeur du code et des vues" title="Glisse pour élargir ou réduire · double-clic : moitié-moitié"></div>
 
     <section class="pane lens-pane" id="lens">
+      <div class="card parcours-card" id="parcours-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Parcours expert</span>
+          <span class="shape">8 niveaux</span>
+        </div>
+        <p class="hint">De « lire un modèle » à « réparer un système en panne ». Rien ne se coche à la main : chaque ligne s'appuie sur une preuve que l'outil a constatée lui-même, avec sa date. Un niveau n'est déclaré validé que lorsque toutes ses vérifications sont mesurables et réussies ; « mesuré » veut dire que tout ce que l'outil sait vérifier aujourd'hui est fait.</p>
+        <div id="parcours-levels"></div>
+      </div>
+      <div class="card defi-card" id="defi-card" hidden></div>
       <div class="card input-card" id="input-card">
         <div class="card-head">
           <span class="tag tag-input">Entrée</span>
@@ -172,5 +183,6 @@
   <script src="/static/app.js"></script>
   <script src="/static/project.js"></script>
   <script src="/static/layout.js"></script>
+  <script src="/static/parcours.js"></script>
 </body>
 </html>

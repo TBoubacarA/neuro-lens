@@ -218,6 +218,7 @@ async function run(live = false) {
 
 // Un modèle scikit-learn ou un agent : pas de couches, donc pas d'entrée à dessiner ni de vue réseau.
 function renderOther(res) {
+  defiUpdate(null); // pas de défi pour un modèle scikit-learn ou un agent (pour l'instant)
   lastLayers = [];
   lastShape = "";
   tokens = null;
@@ -265,6 +266,7 @@ function render(res) {
     renderTraining(res);
     renderExplore(res);
     renderArcs(res);
+    defiUpdate(res);
   } else {
     err.hidden = false;
     err.textContent = (res.line ? `Ligne ${res.line} : ` : "") + res.error;
