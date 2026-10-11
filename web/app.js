@@ -179,6 +179,7 @@ $("seven").addEventListener("click", () => { pixels = null; paintPad(seven()); s
 
 // Le code a changé : le réglage fait au curseur ne vaut plus.
 function codeChanged() {
+  if (window.projectMode) return; // un fichier du projet est ouvert en lecture : pas d'analyse
   mlOverride = null;
   schedule();
 }

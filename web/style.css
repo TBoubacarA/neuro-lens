@@ -441,3 +441,29 @@ input.ops-drift { width: 160px; display: inline-block; margin: 0; }
 .ops-node.on rect { stroke: var(--ok); stroke-dasharray: none; }
 .ops-node.busy rect { stroke: var(--act); }
 .ops-log { max-height: 180px; color: var(--muted); }
+
+/* Vue Projet : explorateur à gauche du code, onglets, plan, dépendances */
+.code-pane { flex-direction: row; }
+.explorer { width: 230px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
+.explorer select { margin: 8px; font-size: 12px; }
+.project-tree { overflow: auto; flex: 1; font-size: 12.5px; padding-bottom: 12px; }
+.tree-row { display: flex; align-items: center; gap: 6px; padding: 3px 8px; cursor: pointer; white-space: nowrap; }
+.tree-row:hover { background: #7aa2ff14; }
+.tree-row.on { background: #7aa2ff2a; }
+.tree-row.dir .tree-name { font-weight: 600; }
+.tree-icon { width: 16px; text-align: center; color: var(--muted); font-size: 11px; }
+.tree-meta { margin-left: auto; color: var(--muted); font-size: 10.5px; }
+.editor-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tabs { display: flex; gap: 2px; padding: 4px 6px 0; border-bottom: 1px solid var(--border); background: var(--panel); }
+.tab { border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; background: transparent; padding: 4px 10px; font-size: 12px; display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.tab b { font-weight: 500; }
+.tab.on { background: var(--bg); color: var(--text); border-color: var(--border); }
+.tab.close { margin-left: auto; font-size: 14px; }
+#project-btn.on { border-color: var(--accent); color: var(--accent); }
+.outline > div { display: grid; grid-template-columns: 18px auto 1fr; gap: 8px; padding: 4px 4px; border-top: 1px solid var(--border); font-size: 12px; cursor: pointer; align-items: baseline; }
+.outline > div:hover { background: #7aa2ff14; }
+.outline i { font-style: normal; color: var(--accent); font-family: ui-monospace, Menlo, monospace; }
+.outline b { font-family: ui-monospace, Menlo, monospace; font-weight: 500; }
+.outline span { color: var(--muted); overflow-wrap: anywhere; }
+.proj-lines { text-anchor: middle; fill: var(--muted); font-size: 9.5px; }
+.agent-node.test rect { stroke-dasharray: 4 3; }
