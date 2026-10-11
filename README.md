@@ -108,6 +108,10 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
+### Vue Projet : les fichiers, comme dans VS Code
+
+Le bouton « Projet » ouvre un explorateur de fichiers à gauche du code. Un clic ouvre le fichier dans l'éditeur (en lecture, avec un onglet pour revenir à l'exemple) ; à droite, trois cartes : le rôle du fichier et de son dossier en une phrase, le plan du fichier (fonctions et classes, un clic y va), et le graphe des modules du serveur (A → B : A importe B ; les briques en bas, ceux qui assemblent en haut). Le menu du haut permet d'ouvrir aussi le dossier d'une version mise en production.
+
 ## Comment ça marche
 
 ```
@@ -119,6 +123,7 @@ server/
   mlops.py     suivi des essais, versions, service de prédiction, surveillance
   infra.py     construit l'image Docker d'une version et lance son conteneur
   agents.py    agents LangGraph
+  project.py   vue Projet : arborescence, rôle des fichiers, plan, graphe des modules
   llmops.py    trace des agents, tokens et coût, garde-fou, évaluation sur un jeu de cas
 tests/
 ```

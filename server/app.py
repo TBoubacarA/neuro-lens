@@ -221,6 +221,22 @@ def reset_endpoint(req: CodeRequest) -> dict:
     return worker.run(req.code, None, op="reset")
 
 
+@app.get("/api/project")
+def project_endpoint(root: str = "app") -> dict:
+    """La vue Projet : l'arborescence des fichiers avec leur rôle, et le graphe des modules du serveur."""
+    from server import project
+
+    return project.describe(root)
+
+
+@app.get("/api/project/file")
+def project_file_endpoint(root: str = "app", path: str = "") -> dict:
+    """Un fichier du projet, en lecture seule, avec son rôle, ses imports et son plan."""
+    from server import project
+
+    return project.read(root, path)
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")

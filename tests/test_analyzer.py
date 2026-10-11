@@ -547,3 +547,26 @@ def test_feature_names_from_the_code_are_used():
     code = TREE + 'feature_names = ["température", "vibration"]\n'
     assert analyze(code)["features"] == ["température", "vibration"]
     assert analyze(TREE + 'feature_names = ["une seule"]\n')["features"] == ["x1", "x2"]  # mauvais nombre : ignoré
+
+
+def test_project_view_lists_files_with_roles_and_dependencies(tmp_path, monkeypatch):
+    from server import project
+
+    monkeypatch.setenv("NEURO_LENS_HOME", str(tmp_path))  # aucun modèle déployé : une seule racine
+    res = project.describe("app")
+    assert res["ok"] and [r["id"] for r in res["roots"]] == ["app"]
+    names = {n["name"]: n for n in res["tree"]}
+    assert {"server", "web", "tests", "README.md", "requirements.txt"} <= set(names)
+    assert "FastAPI" in next(c for c in names["server"]["children"] if c["name"] == "app.py")["role"]
+    assert names["tests"]["why"] and names["server"]["kind"] == "dir"
+    edges = {(e["source"], e["target"]) for e in res["graph"]["edges"]}
+    assert ("app", "analyzer") in edges and ("analyzer", "llmops") in edges and ("tests/test_analyzer", "analyzer") in edges
+    f = project.read("app", "server/llmops.py")
+    assert f["ok"] and f["role"].startswith("LLMOps") and "evaluate" in [s["name"] for s in f["symbols"]]
+    assert not project.read("app", "../etc/passwd")["ok"] and not project.read("app", "server/nope.py")["ok"]
+    assert not project.describe("v999")["ok"]
+    import server.app as app_module
+
+    with TestClient(app_module.app) as client:
+        assert client.get("/api/project").json()["ok"]
+        assert client.get("/api/project/file", params={"root": "app", "path": "README.md"}).json()["lines"] > 50

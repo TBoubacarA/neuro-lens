@@ -13,13 +13,21 @@
     <select id="examples" aria-label="Exemples"></select>
     <button id="to-ops" class="small to-ops" hidden title="Essais, versions, image Docker, API, surveillance">Chaîne MLOps ↓</button>
     <button id="share" class="small" title="Copier un lien qui contient ce code">Partager</button>
+    <button id="project-btn" class="small" title="Les fichiers du projet, leur rôle et leurs dépendances">Projet</button>
     <span id="status" class="status">…</span>
   </header>
 
   <main>
     <section class="pane code-pane">
-      <div id="editor"></div>
-      <div id="error" class="error" hidden></div>
+      <aside id="explorer" class="explorer" hidden>
+        <select id="project-root" aria-label="Projet"></select>
+        <div id="project-tree" class="project-tree"></div>
+      </aside>
+      <div class="editor-col">
+        <div id="tabs" class="tabs" hidden></div>
+        <div id="editor"></div>
+        <div id="error" class="error" hidden></div>
+      </div>
     </section>
 
     <section class="pane lens-pane" id="lens">
@@ -150,5 +158,6 @@
   <script src="/static/dream.js"></script>
   <script src="/static/explore.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/project.js"></script>
 </body>
 </html>
