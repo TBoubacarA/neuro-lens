@@ -146,6 +146,15 @@ tests/
 
 Le serveur exécute le code tapé dans l'éditeur : il est fait pour tourner sur ta machine (il n'écoute que sur 127.0.0.1), pas pour être exposé sur Internet.
 
+## La carte 3D de la chaîne
+
+En haut du panneau de droite, pour chaque type de projet (ML classique, réseau de neurones, agent) : quatre plateformes — **Données, Modèle, Infrastructure, Production** — et sur chacune les briques du projet.
+
+- Une brique qui existe vraiment dans ton projet se dresse en volume ; une brique prête mais pas branchée reste basse ; une brique absente est à plat.
+- Les flux circulent d'une brique à l'autre ; la boucle en pointillés ramène la production vers les données.
+- Un clic sur une brique l'explique simplement : à quoi elle sert, ce qu'elle vaut dans ton projet, ce qui se passe sans elle, et où la trouver (la carte de la page ou le fichier du projet).
+- La carte se fait tourner à la souris (ou aux flèches du clavier) et suit l'état réel : déployer une version ou lancer le conteneur fait monter les briques correspondantes.
+
 ## S'entraîner, pas seulement regarder
 
 - **Mode défi** (bouton en haut) : pour un réseau PyTorch, les vues sont cachées tant que tu n'as pas prédit la forme de sortie de trois couches et le nombre de paramètres d'une quatrième. La correction donne le calcul. Seul un sans-faute compte.

@@ -240,6 +240,7 @@ function renderOther(res) {
 function render(res) {
   const err = $("error");
   if (res.ok) projectRefresh(res.workspace);
+  if (res.ok && typeof renderChain === "function") renderChain(res);
   if (res.ok && res.kind) {
     err.hidden = true;
     setErrorMarker(null);

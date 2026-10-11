@@ -55,6 +55,18 @@
         <div id="parcours-levels"></div>
       </div>
       <div class="card defi-card" id="defi-card" hidden></div>
+      <div class="card chain-card" id="chain-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Ta chaîne, de la donnée à la production</span>
+          <span class="name" id="chain-title"></span>
+          <button id="chain-toggle" class="small">Réduire</button>
+          <span class="shape" id="chain-shape"></span>
+        </div>
+        <div id="chain-body">
+          <p class="hint">Les quatre étages de tout projet d'IA. Une brique qui existe vraiment dans ton projet se dresse en volume ; une brique prête mais pas encore branchée reste basse ; une brique absente est à plat. Les flux vont de gauche à droite, et la boucle en pointillés ramène la production vers les données.</p>
+          <div id="chain" class="chain" tabindex="0" aria-label="Carte 3D de la chaîne. Flèches gauche et droite pour la faire tourner."></div>
+          <div id="chain-info" class="chain-info"></div>
+        </div>
       <div class="card panne-card" id="panne-card" hidden>
         <div class="card-head">
           <span class="tag tag-input">Mode panne</span>
@@ -202,5 +214,6 @@
   <script src="/static/project.js"></script>
   <script src="/static/layout.js"></script>
   <script src="/static/parcours.js"></script>
+  <script src="/static/chain.js"></script>
 </body>
 </html>
