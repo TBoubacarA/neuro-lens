@@ -61,6 +61,8 @@ Sous le modèle, six étapes réelles, qui tournent sur ta machine :
 5. **API de prédiction** : `POST /api/predict` répond avec la version en production ; la commande `curl` équivalente est affichée.
 6. **Surveillance** : latence, bonnes réponses et dérive des données reçues (indice PSI par colonne). Un curseur simule un monde qui change, jusqu'à l'alerte.
 
+Une carte **Infrastructure** construit pour de bon l'image Docker de la version en production (`docker build`), lance son conteneur sur un port libre de la machine (`127.0.0.1` seulement) et l'interroge par le réseau. Il faut Docker lancé sur la machine.
+
 Le dossier d'une version se lance seul : `cd .neuro-lens/models/v1 && uvicorn serve:app --port 8080`.
 
 ### Agents LangGraph
@@ -99,6 +101,8 @@ L'éditeur (Monaco, celui de VS Code) est chargé depuis un CDN ; sans connexion
 
 ## Tests
 
+Les tests tournent aussi sur GitHub à chaque push et à chaque pull request (`.github/workflows/tests.yml`).
+
 ```bash
 pip install -r requirements-dev.txt
 pytest
@@ -113,6 +117,7 @@ server/
   analyzer.py  réseaux PyTorch : capture la sortie de chaque couche et le trajet des données
   ml.py        modèles scikit-learn
   mlops.py     suivi des essais, versions, service de prédiction, surveillance
+  infra.py     construit l'image Docker d'une version et lance son conteneur
   agents.py    agents LangGraph
   llmops.py    trace des agents, tokens et coût, garde-fou, évaluation sur un jeu de cas
 tests/

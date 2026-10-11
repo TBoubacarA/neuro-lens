@@ -186,6 +186,36 @@ def simulate_endpoint(req: SimulateRequest) -> dict:
     return worker.run("", None, op="simulate", override={"n": req.n, "drift": req.drift})
 
 
+@app.post("/api/infra/build")
+def infra_build_endpoint() -> dict:
+    """Construit l'image Docker de la version en production et lance son conteneur."""
+    from server import infra
+
+    return infra.build()
+
+
+@app.get("/api/infra/status")
+def infra_status_endpoint() -> dict:
+    from server import infra
+
+    return infra.status()
+
+
+@app.post("/api/infra/stop")
+def infra_stop_endpoint() -> dict:
+    from server import infra
+
+    return infra.stop()
+
+
+@app.post("/api/infra/predict")
+def infra_predict_endpoint(req: PredictRequest) -> dict:
+    """La même demande de prédiction, mais envoyée au conteneur."""
+    from server import infra
+
+    return infra.predict(req.rows)
+
+
 @app.post("/api/reset")
 def reset_endpoint(req: CodeRequest) -> dict:
     return worker.run(req.code, None, op="reset")

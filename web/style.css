@@ -435,3 +435,9 @@ input.ops-drift { width: 160px; display: inline-block; margin: 0; }
 .llm-compare tr.best td { background: #4cd98a14; }
 .llm-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 4px; }
 .llm-tabs button.on { border-color: var(--accent); color: var(--accent); }
+
+.ops-infra { display: block; }
+.ops-node rect { fill: var(--bg); stroke: var(--other); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.ops-node.on rect { stroke: var(--ok); stroke-dasharray: none; }
+.ops-node.busy rect { stroke: var(--act); }
+.ops-log { max-height: 180px; color: var(--muted); }

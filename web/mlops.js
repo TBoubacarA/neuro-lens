@@ -135,6 +135,8 @@ function renderMLOps(root, res, ctx) {
   box.appendChild(dep);
   if (!prod) return;
 
+  box.appendChild(infraCard(prod));
+
   // ----- 5. L'API de prédiction -----
   const api = mlCard("conv", "API de prédiction", `POST /api/predict · v${prod.version}`);
   api.id = "ops-api";
@@ -291,4 +293,119 @@ function driftHistogram(f) {
   cap.querySelector("b").textContent = f.name;
   fig.appendChild(cap);
   return fig;
+}
+
+// ---------- Infrastructure : l'image Docker et son conteneur ----------
+
+let opsInfra = null;      // dernier état connu : { phase, log, image, size_mb, port, ... }
+let opsInfraAnswer = null;
+let opsInfraTimer = null;
+
+function infraCard(prod) {
+  const card = mlCard("conv", "Infrastructure : image et conteneur", "Docker");
+  card.id = "ops-infra";
+  addText(card, "explain", "Le dossier de la version devient une image : une boîte fermée qui contient Python, les bibliothèques et le modèle, identique partout où elle tourne. Lancée, l'image devient un conteneur qui répond sur un port. C'est cette boîte qu'on envoie sur un serveur ou dans le cloud.");
+  const body = document.createElement("div");
+  card.appendChild(body);
+
+  const refresh = async (path, method = "GET") => {
+    try {
+      const r = await fetch(path, { method });
+      const out = await r.json();
+      if (out.infra) opsInfra = out.infra;
+      if (!out.ok) opsInfra = { phase: "failed", log: [], error: out.error };
+    } catch (e) {
+      opsInfra = { phase: "failed", log: [], error: "Le serveur ne répond pas." };
+    }
+    paint();
+  };
+
+  const paint = () => {
+    if (!body.isConnected && body.parentNode !== card) return;
+    const job = opsInfra ?? { phase: "idle", log: [] };
+    const busy = job.phase === "building" || job.phase === "starting";
+    const built = ["starting", "running", "stopped"].includes(job.phase);
+    const live = job.phase === "running";
+    body.innerHTML = "";
+    body.appendChild(infraDiagram(prod, job, built, live));
+
+    const actions = document.createElement("div");
+    actions.className = "train-actions";
+    const go = document.createElement("button");
+    go.textContent = busy ? (job.phase === "building" ? "Construction de l'image…" : "Démarrage du conteneur…") : "Construire l'image et lancer le conteneur";
+    go.disabled = busy;
+    go.addEventListener("click", () => { opsInfraAnswer = null; refresh("/api/infra/build", "POST"); });
+    actions.appendChild(go);
+    if (live) {
+      const ask = document.createElement("button");
+      ask.textContent = "Interroger le conteneur";
+      ask.addEventListener("click", async () => {
+        const r = await fetch("/api/infra/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: [prod.example] }) });
+        opsInfraAnswer = await r.json();
+        paint();
+      });
+      const halt = document.createElement("button");
+      halt.className = "small";
+      halt.textContent = "Arrêter le conteneur";
+      halt.addEventListener("click", () => { opsInfraAnswer = null; refresh("/api/infra/stop", "POST"); });
+      actions.append(ask, halt);
+    }
+    body.appendChild(actions);
+
+    if (job.error) addText(body, "meta", job.error).classList.add("ops-warn");
+    if (built) {
+      addText(body, "meta", `Image ${job.image}` + (job.size_mb ? ` · ${job.size_mb} Mo` : "") + (job.build_s ? ` · construite en ${job.build_s} s` : "") +
+        (live ? ` · conteneur ${job.container} à l'écoute sur http://127.0.0.1:${job.port}` : job.phase === "stopped" ? " · conteneur arrêté" : ""));
+    }
+    if (opsInfraAnswer) {
+      addText(body, opsInfraAnswer.ok ? "ops-answer" : "meta", opsInfraAnswer.ok
+        ? `Le conteneur répond : ${opsInfraAnswer.predictions[0]} · version ${opsInfraAnswer.version} · ${opsInfraAnswer.round_trip_ms} ms aller-retour par le réseau`
+        : opsInfraAnswer.error);
+    }
+    if (job.log.length) {
+      const pre = document.createElement("pre");
+      pre.className = "ops-code ops-log";
+      pre.textContent = job.log.join("\n");
+      body.appendChild(pre);
+      pre.scrollTop = pre.scrollHeight;
+    }
+    clearTimeout(opsInfraTimer);
+    if (busy) opsInfraTimer = setTimeout(() => refresh("/api/infra/status"), 1000);
+  };
+
+  paint();
+  if (!opsInfra) refresh("/api/infra/status");
+  return card;
+}
+
+// Le chemin du dossier jusqu'au conteneur ; chaque boîte s'allume quand elle existe vraiment.
+function infraDiagram(prod, job, built, live) {
+  const W = 446, H = 132;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "ops-infra" });
+  svg.appendChild(el("defs", {})).innerHTML =
+    '<marker id="nl-iarrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" class="graph-arrow"/></marker>';
+  const node = (x, y, w, title, sub, state) => {
+    const g = svg.appendChild(el("g", { class: `ops-node ${state}` }));
+    g.appendChild(el("rect", { x, y, width: w, height: 44, rx: 6 }));
+    g.appendChild(el("text", { x: x + w / 2, y: y + 18, class: "blocks-label" }, title));
+    g.appendChild(el("text", { x: x + w / 2, y: y + 33, class: "blocks-sub" }, sub));
+  };
+  const arrow = (x1, y1, x2, y2, label) => {
+    svg.appendChild(el("line", { x1, y1, x2, y2, class: "tree-edge", "marker-end": "url(#nl-iarrow)" }));
+    if (label) svg.appendChild(el("text", { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 5, class: "tree-yesno" }, label));
+  };
+  const building = job.phase === "building";
+  node(4, 8, 122, `Dossier v${prod.version}`, "serve.py, Dockerfile", "on");
+  arrow(126, 30, 160, 30, "build");
+  node(162, 8, 122, "Image", built ? `${job.size_mb ?? "?"} Mo` : building ? "en construction…" : "pas construite", built ? "on" : building ? "busy" : "");
+  arrow(284, 30, 318, 30, "run");
+  node(320, 8, 122, "Conteneur", live ? `port ${job.port}` : job.phase === "starting" ? "démarrage…" : "arrêté", live ? "on" : job.phase === "starting" ? "busy" : "");
+  node(162, 82, 122, "Ton application", "curl, site, service", "on");
+  arrow(284, 104, 381, 104, "");
+  arrow(381, 104, 381, 54, "");
+  svg.appendChild(el("text", { x: 332, y: 99, class: "tree-yesno" }, "POST /predict"));
+  const box = document.createElement("div");
+  box.className = "graph";
+  box.appendChild(svg);
+  return box;
 }
