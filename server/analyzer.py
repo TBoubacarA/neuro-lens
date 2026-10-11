@@ -251,6 +251,11 @@ def _other_kinds(code: str, namespace: dict, override: dict | None = None) -> di
         if model is not None and ml.is_sklearn(model):
             result = ml.describe(model, namespace, override)
             name = "model"
+            if result.get("ok"):  # la chaîne MLOps : l'essai est noté, l'état du registre et de la production suit
+                from server import mlops
+
+                mlops.record_run(result)
+                result["mlops"] = mlops.state()
         elif graph is not None and agents.is_langgraph(graph):
             result = agents.describe(graph, namespace, code)
             name = "graph"
@@ -331,6 +336,18 @@ def landscape(code: str) -> dict:
     from server import trainer
 
     return _with_model(code, lambda model: trainer.landscape(code, model))
+
+
+def deploy(code: str, override: dict | None = None) -> dict:
+    """Entraîne le modèle scikit-learn du code et en fait une nouvelle version en production (voir server/mlops.py)."""
+    from server import ml, mlops
+
+    result = analyze(code, override=override)
+    if not result.get("ok"):
+        return result
+    if result.get("kind") != "ml":
+        return {"ok": False, "error": "La mise en production marche pour les modèles scikit-learn.", "line": None}
+    return mlops.deploy(ml.LAST, result)
 
 
 def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None = None,

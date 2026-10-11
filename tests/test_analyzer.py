@@ -387,3 +387,57 @@ def test_knob_shows_overfitting_and_can_be_overridden():
     km = analyze("from sklearn.datasets import load_iris\nfrom sklearn.cluster import KMeans\n"
                  "X = load_iris().data\nmodel = KMeans(n_clusters=3, n_init=3, random_state=0)\n")
     assert len(km["knob"]["inertia"]) == 7 and km["knob"]["inertia"][0] > km["knob"]["inertia"][-1]
+
+
+def test_mlops_chain_from_run_to_drift_alert(tmp_path, monkeypatch):
+    import importlib.util
+
+    from server import mlops
+    from server.analyzer import deploy
+
+    monkeypatch.setenv("NEURO_LENS_HOME", str(tmp_path))
+    monkeypatch.setattr(mlops, "_runs", [])
+    monkeypatch.setattr(mlops, "_prod", None)
+    monkeypatch.setattr(mlops, "_events", [])
+
+    # 1. Suivi des essais : une ligne par combinaison, pas une par analyse
+    analyze(TREE)
+    analyze(TREE)
+    res = analyze(TREE, override={"max_depth": 6})
+    runs = res["mlops"]["runs"]
+    assert [r["setting"] for r in runs] == ["max_depth=3", "max_depth=6"] and runs[0]["held_out"] is not None
+    assert res["mlops"]["production"] is None and not mlops.predict([[0.0, 0.0]])["ok"]
+
+    # 2. Registre : chaque déploiement est une nouvelle version, avec son dossier prêt à servir
+    assert deploy(TREE)["deployed"] == 1
+    out = deploy(TREE, override={"max_depth": 6})
+    assert out["deployed"] == 2 and [v["version"] for v in out["mlops"]["versions"]] == [1, 2]
+    prod = out["mlops"]["production"]
+    assert prod["version"] == 2 and prod["params"]["max_depth"] == 6 and set(prod["texts"]) >= {"serve.py", "Dockerfile"}
+    assert not deploy(CNN)["ok"]
+
+    # 3. Service : la réponse vient de la version en production
+    answer = mlops.predict([prod["example"], prod["example"]])
+    assert answer["ok"] and answer["version"] == 2 and len(answer["predictions"]) == 2 and len(answer["probabilities"][0]) == 2
+    assert not mlops.predict([[1.0]])["ok"]
+
+    # 4. Le serve.py généré marche pour de bon
+    spec = importlib.util.spec_from_file_location("serve_v2", tmp_path / "models" / "v2" / "serve.py")
+    serve = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(serve)
+    with TestClient(serve.app) as client:
+        assert client.get("/health").json() == {"status": "ok", "version": 2}
+        assert client.post("/predict", json={"rows": [prod["example"]]}).json()["predictions"] == answer["predictions"][:1]
+        assert client.post("/predict", json={"rows": [[1.0]]}).status_code == 422
+
+    # 5. Surveillance : sans dérive tout va bien ; avec, l'alerte se lève et la qualité baisse
+    mlops._events.clear()
+    calm = mlops.simulate(200, 0.0)["mlops"]["monitoring"]
+    assert calm["requests"] == 200 and calm["status"] == "ok" and calm["quality"] > 0.85
+    mlops._events.clear()
+    moved = mlops.simulate(200, 2.0)["mlops"]["monitoring"]
+    assert moved["status"] == "alert" and moved["drift"] > calm["drift"] and moved["quality"] < calm["quality"]
+
+    # 6. Après un redémarrage, la production est rechargée depuis le disque
+    monkeypatch.setattr(mlops, "_prod", None)
+    assert mlops.predict([prod["example"]])["version"] == 2
