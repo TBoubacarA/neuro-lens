@@ -399,3 +399,9 @@ variantes = {
 }
 `,
 };
+
+// Une entrée au nom explicite : le même agent, avec en tête ce qu'il faut regarder à droite.
+window.NEURO_EXAMPLES["LLMOps et AgentOps : tracer et évaluer un agent"] =
+  "# Sous le déroulé de l'agent, à droite : la trace (étapes, appels au modèle, tokens, coût), le garde-fou\n" +
+  "# LIMITES, et l'évaluation sur `cas` avec deux variantes de prompt comparées.\n\n" +
+  window.NEURO_EXAMPLES["Agent IA avec Claude (LangGraph)"];
