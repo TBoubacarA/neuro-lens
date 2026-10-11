@@ -54,6 +54,15 @@ Un curseur change le réglage principal du modèle (profondeur d'un arbre, nombr
 
 L'agent est exécuté pour de bon à partir de `state`. Un lecteur rejoue le déroulé pas à pas. Le premier exemple remplace le modèle de langage par une fonction simple, pour tourner sans clé d'API.
 
+#### Trace, coût, évaluation (LLMOps et AgentOps)
+
+Sous le déroulé, ce qu'une équipe qui met des agents en production regarde tous les jours :
+
+- **Trace** : une ligne de temps avec chaque étape de l'agent et, dedans, chaque appel au modèle de langage : modèle, tokens en entrée et en sortie, outils demandés, raison d'arrêt. Survoler une barre renvoie à la ligne du code.
+- **Coût** : si le code donne `PRIX = {"claude-opus-5-5": {"entree": 5.0, "sortie": 25.0}}` (dollars par million de tokens), chaque appel et chaque exécution sont chiffrés.
+- **Garde-fou** : `LIMITES = {"appels": 8, "tokens": 20000}` arrête l'agent avant qu'il ne dépasse le budget (12 appels par défaut).
+- **Évaluation** : `cas = [{"question": "…", "attendu": "…"}, …]` fait tourner l'agent sur chaque cas et le note ; la réponse attendue doit se trouver dans sa réponse. On change le prompt ou le modèle, et on regarde la note bouger.
+
 L'exemple « Agent IA avec Claude » est piloté par un vrai modèle : Claude choisit lui-même ses outils (recherche, calculatrice) et on voit chaque appel dans le déroulé. Lance le serveur avec ta clé, puis clique sur « Lancer avec Claude » :
 
 ```bash
@@ -90,6 +99,7 @@ server/
   analyzer.py  réseaux PyTorch : capture la sortie de chaque couche et le trajet des données
   ml.py        modèles scikit-learn
   agents.py    agents LangGraph
+  llmops.py    trace des agents, tokens et coût, garde-fou, évaluation sur un jeu de cas
 tests/
 ```
 

@@ -362,5 +362,14 @@ graph.add_edge("repondre", END)
 
 state = {"question": "Combien de centimètres mesure la tour Eiffel ?",
          "messages": [], "outil": {}, "action": "", "reponse": ""}
+
+# LLMOps : neuro-lens trace chaque appel au modèle (tokens, coût, durée) et note l'agent sur ces cas.
+PRIX = {"claude-opus-5-5": {"entree": 5.0, "sortie": 25.0}}   # dollars par million de tokens : mets ta grille
+LIMITES = {"appels": 8}                                        # garde-fou : au-delà, l'agent s'arrête
+cas = [
+    {"question": "Combien de centimètres mesure la tour Eiffel ?", "attendu": "33 000"},
+    {"question": "Quelle est la hauteur de l'Everest en mètres ?", "attendu": "8 849"},
+    {"question": "Combien font 12 * 12 ?", "attendu": "144"},
+]
 `,
 };

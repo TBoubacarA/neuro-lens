@@ -387,3 +387,83 @@ def test_knob_shows_overfitting_and_can_be_overridden():
     km = analyze("from sklearn.datasets import load_iris\nfrom sklearn.cluster import KMeans\n"
                  "X = load_iris().data\nmodel = KMeans(n_clusters=3, n_init=3, random_state=0)\n")
     assert len(km["knob"]["inertia"]) == 7 and km["knob"]["inertia"][0] > km["knob"]["inertia"][-1]
+
+
+def test_agentops_trace_and_evaluation_offline(monkeypatch):
+    """Sans clé : la trace montre les étapes, aucun appel au modèle, et la règle fixe ne réussit qu'un cas."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    res = analyze(_example("Agent IA avec Claude (LangGraph)"))
+    ops = res["ops"]
+    assert ops["calls"] == 0 and ops["tokens_in"] == 0 and ops["cost"] == 0.0 and ops["priced"]
+    assert [s["name"] for s in ops["spans"]] == ["reflechir", "chercher", "reflechir", "calculer", "reflechir", "repondre"]
+    assert all(s["kind"] == "step" and s["end"] >= s["start"] for s in ops["spans"])
+    assert "action" in ops["spans"][0]["changed"] and ops["limits"]["appels"] == 8
+    ev = ops["eval"]
+    assert ev["total"] == 3 and ev["passed"] == 1
+    assert [r["ok"] for r in ev["rows"]] == [True, False, False] and ev["rows"][1]["got"] == "La tour Eiffel mesure 33 000 cm."
+    assert ev["rows"][0]["steps"] == 6 and ev["rows"][0]["calls"] == 0
+    assert analyze(AGENT)["ops"]["eval"] is None  # pas de `cas` : pas d'évaluation
+
+
+def _fake_claude(monkeypatch, usage=(120, 30)):
+    """Un faux Claude qui cherche, calcule, puis répond, et compte ses tokens.
+
+    Ses réponses passent par la méthode `create` de la classe du SDK, celle que la trace observe.
+    """
+    import types
+
+    import anthropic
+    from anthropic.resources.beta.messages.messages import Messages as BetaMessages
+
+    calls = []
+
+    def block(**kw):
+        return types.SimpleNamespace(**kw)
+
+    def create(_self, **kw):
+        calls.append(kw)
+        turn = sum(1 for m in kw["messages"] if m["role"] == "assistant")
+        script = [
+            [block(type="tool_use", id="t1", name="chercher", input={"sujet": "Tour Eiffel"})],
+            [block(type="tool_use", id="t2", name="calculer", input={"operation": "330 * 100"})],
+            [block(type="text", text="Elle mesure 33 000 cm.")],
+        ]
+        return types.SimpleNamespace(content=script[min(turn, 2)], stop_reason="end_turn", model="claude-opus-5-5",
+                                     usage=types.SimpleNamespace(input_tokens=usage[0], output_tokens=usage[1]))
+
+    class Client:
+        class beta:  # noqa: N801
+            class messages:  # noqa: N801
+                @staticmethod
+                def create(**kw):
+                    return BetaMessages.create(None, **kw)
+
+    monkeypatch.setattr(BetaMessages, "create", create)
+    monkeypatch.setattr(anthropic, "Anthropic", lambda: Client())
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    monkeypatch.setenv("NEURO_LENS_LIVE", "1")
+    return calls, create
+
+
+def test_agentops_trace_counts_tokens_and_cost_live(monkeypatch):
+    from anthropic.resources.beta.messages.messages import Messages as BetaMessages
+
+    calls, create = _fake_claude(monkeypatch)
+    res = analyze(_example("Agent IA avec Claude (LangGraph)"))
+    ops = res["ops"]
+    assert res["ok"] and ops["calls"] == 3 and ops["tokens_in"] == 360 and ops["tokens_out"] == 90
+    assert ops["cost"] == round((360 * 5.0 + 90 * 25.0) / 1e6, 6) and ops["tools"] == {"chercher": 1, "calculer": 1}
+    llm = [s for s in ops["spans"] if s["kind"] == "llm"]
+    assert [s["tools"] for s in llm] == [["chercher"], ["calculer"], []] and llm[2]["text"] == "Elle mesure 33 000 cm."
+    assert [s["name"] for s in ops["spans"] if s["kind"] == "step"][:2] == ["reflechir", "chercher"]
+    ev = ops["eval"]
+    assert ev["total"] == 3 and all(r["calls"] == 3 and r["tokens"] == 450 for r in ev["rows"])
+    assert [r["ok"] for r in ev["rows"]] == [True, False, False]  # le faux Claude répond toujours la même chose
+    assert len(calls) == 12  # 3 pour le déroulé, 3 par cas
+
+    # Garde-fou : avec LIMITES = {"appels": 1}, l'agent s'arrête au deuxième appel.
+    code = _example("Agent IA avec Claude (LangGraph)").replace('LIMITES = {"appels": 8}', 'LIMITES = {"appels": 1}')
+    capped = analyze(code)
+    assert capped["ops"]["calls"] == 1 and "Garde-fou" in capped["ops"]["stopped"] and "Garde-fou" in capped["stopped"]
+    assert all(r["calls"] == 1 and not r["ok"] and "Garde-fou" in r["stopped"] for r in capped["ops"]["eval"]["rows"])
+    assert BetaMessages.create is create  # les patches de la trace sont bien retirés
