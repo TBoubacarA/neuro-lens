@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>neuro-lens</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Ccircle cx=%278%27 cy=%278%27 r=%276%27 fill=%27%237aa2ff%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="dot"></span>neuro-lens</div>
+    <select id="examples" aria-label="Exemples"></select>
+    <button id="share" class="small" title="Copier un lien qui contient ce code">Partager</button>
+    <span id="status" class="status">…</span>
+  </header>
+
+  <main>
+    <section class="pane code-pane">
+      <div id="editor"></div>
+      <div id="error" class="error" hidden></div>
+    </section>
+
+    <section class="pane lens-pane" id="lens">
+      <div class="card input-card" id="input-card">
+        <div class="card-head">
+          <span class="tag tag-input">Entrée</span>
+          <span class="shape" id="input-shape">1 × 28 × 28</span>
+        </div>
+        <div id="text-input" hidden>
+          <p class="hint">Écris une phrase : chaque mot devient un token, puis un vecteur.</p>
+          <input id="text" type="text" spellcheck="false" aria-label="Phrase d'entrée">
+          <div id="tokens" class="tokens"></div>
+          <svg id="arcs" class="arcs" hidden></svg>
+          <p class="hint" id="arcs-hint" hidden>Survole un mot : les arcs montrent à qui il prête attention (moyenne des têtes de la première couche d'attention).</p>
+        </div>
+        <p class="hint" id="pad-hint">Dessine un chiffre : le réseau se recalcule à chaque trait.</p>
+        <div class="input-row" id="pad-row">
+          <canvas id="pad" width="28" height="28"></canvas>
+          <div class="input-actions">
+            <button id="clear">Effacer</button>
+            <button id="seven">Exemple « 7 »</button>
+          </div>
+          <figure id="saliency-box" class="saliency" hidden>
+            <canvas id="saliency" width="28" height="28"></canvas>
+            <figcaption>Ce que le réseau regarde : en orange, les pixels qui pèsent le plus dans sa réponse.</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="card train-card" id="train-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Entraînement</span>
+          <span class="shape" id="train-shape">poids aléatoires</span>
+        </div>
+        <p class="hint">Fais apprendre le réseau sur 1 437 vrais chiffres manuscrits. Après chaque époque, toutes les vues se mettent à jour : regarde les filtres se former et la prédiction devenir juste.</p>
+        <div class="train-actions">
+          <button id="train-1">Entraîner 1 époque</button>
+          <button id="train-5">Entraîner 5 époques</button>
+          <button id="train-reset" class="small">Réinitialiser</button>
+          <span id="train-status" class="meta"></span>
+        </div>
+        <div id="train-chart"></div>
+        <div class="epoch-row" id="epoch-row" hidden>
+          <label for="epoch-range">Revoir l'apprentissage :</label>
+          <input id="epoch-range" type="range" min="0" max="0" value="0">
+          <span id="epoch-label" class="meta"></span>
+        </div>
+        <div id="train-eval"></div>
+      </div>
+      <div class="card graph-card" id="graph-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Vue réseau</span>
+          <button id="replay" class="small" title="Rejouer la construction couche par couche">▶ Rejouer la construction</button>
+          <button id="relight" class="small" hidden>Tout rallumer</button>
+          <span class="shape" id="graph-shape"></span>
+        </div>
+        <p class="hint">Chaque rond est un neurone, chaque vignette un canal qui montre ce qu'il voit de ton dessin ; chaque flèche est une connexion. Plus un rond est lumineux, plus il est actif. Le nombre de nœuds est celui écrit dans le code (au-delà de 16, « ⋮ » résume la suite). Survole une colonne pour retrouver sa ligne de code. <b>Et si ?</b>&nbsp;Clique sur un nœud pour l'éteindre : tout ce qui suit est recalculé sans lui, jusqu'à la prédiction.</p>
+        <div id="graph" class="graph"></div>
+      </div>
+      <div class="card graph-card" id="blocks-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Vue blocs</span>
+          <span class="shape" id="blocks-shape"></span>
+        </div>
+        <p class="hint">Le trajet réel des données, de haut en bas. Deux boîtes côte à côte travaillent en parallèle ; une flèche qui contourne des boîtes est un raccourci (connexion résiduelle) ; ⊕ marque l'endroit où deux chemins s'additionnent ou se combinent.</p>
+        <div id="blocks" class="graph"></div>
+      </div>
+      <div class="card train-card" id="dream-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Ce que le réseau imagine</span>
+          <span class="shape" id="dream-shape"></span>
+        </div>
+        <p class="hint">On part d'une image noire et on la retouche jusqu'à ce que le réseau soit sûr d'y voir un 0, puis un 1, un 2… Avant l'entraînement c'est du bruit ; après, on voit ce qu'il a retenu de chaque chiffre. Refais-le après quelques époques pour comparer.</p>
+        <div class="train-actions">
+          <button id="dream-go">Montrer ce qu'il imagine</button>
+          <span id="dream-status" class="meta"></span>
+        </div>
+        <div id="dreams" class="dreams"></div>
+      </div>
+      <div class="card graph-card" id="depth-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Vue 3D</span>
+          <span class="shape" id="depth-shape"></span>
+        </div>
+        <p class="hint">Chaque plaque est la sortie d'une couche : une ligne par mot, une case par nombre de son vecteur (orange positif, bleu négatif). Les plaques s'empilent dans l'ordre du calcul, comme les couches de BERT. Fais glisser pour tourner ; survole une plaque pour retrouver sa ligne de code.</p>
+        <canvas id="depth" class="depth"></canvas>
+      </div>
+      <div id="layers"></div>
+      <div id="prediction"></div>
+      <div class="card train-card" id="attack-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Tromper le réseau</span>
+          <span class="shape" id="attack-shape"></span>
+        </div>
+        <p class="hint">Une retouche presque invisible du dessin suffit souvent à changer la réponse. On cherche, pixel par pixel, la plus petite modification qui fait lire un autre chiffre : c'est une « attaque adverse », la raison pour laquelle on ne fait pas confiance aveuglément à un réseau.</p>
+        <div class="train-actions">
+          <label for="attack-target">Lui faire lire un</label>
+          <select id="attack-target"></select>
+          <button id="attack-go">Le tromper</button>
+          <span id="attack-status" class="meta"></span>
+        </div>
+        <div id="attack-result" class="attack"></div>
+      </div>
+      <div class="card train-card" id="landscape-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Paysage de l'erreur</span>
+          <span class="shape" id="landscape-shape"></span>
+        </div>
+        <p class="hint">Apprendre, c'est descendre une vallée : chaque point de cette carte est un réglage possible des poids, et sa couleur l'erreur que le réseau ferait avec (sombre = faible). Après entraînement, le chemin blanc est celui que l'apprentissage a suivi, époque par époque, jusqu'au point actuel ◎.</p>
+        <div class="train-actions">
+          <button id="landscape-go">Dessiner le paysage</button>
+          <span id="landscape-status" class="meta"></span>
+        </div>
+        <div id="landscape" class="landscape"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/examples.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script src="/static/graph.js"></script>
+  <script src="/static/blocks.js"></script>
+  <script src="/static/ml.js"></script>
+  <script src="/static/agents.js"></script>
+  <script src="/static/depth.js"></script>
+  <script src="/static/train.js"></script>
+  <script src="/static/dream.js"></script>
+  <script src="/static/explore.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
