@@ -490,3 +490,17 @@ body { overflow: hidden; } /* seuls les panneaux défilent, jamais la page */
 .llm-rules > div.ko b, .llm-rules > div.ko span { color: var(--danger); }
 .llm-table td.llm-ok { color: var(--ok); }
 .llm-table td.llm-ko { color: var(--danger); white-space: nowrap; }
+
+/* Colonnes redimensionnables : explorateur | code | vues */
+main { grid-template-columns: var(--code-w, minmax(0, 1fr)) 7px minmax(0, 1fr); }
+.code-pane { border-right: 0; }
+.explorer { width: var(--explorer-w, 230px); border-right: 0; }
+.splitter { flex: none; width: 7px; cursor: col-resize; background: var(--border); background-clip: content-box; padding: 0 3px; touch-action: none; transition: background-color .12s; }
+.splitter:hover, .splitter.dragging, .splitter:focus-visible { background-color: var(--accent); outline: none; }
+.explorer[hidden] + .splitter { display: none; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing .editor-col, body.resizing .lens-pane, body.resizing .explorer { pointer-events: none; } /* l'éditeur ne capte pas la souris pendant qu'on glisse */
+@media (max-width: 900px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  #split-main { display: none; }
+}
