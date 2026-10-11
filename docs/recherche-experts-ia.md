@@ -2,6 +2,27 @@
 
 *Recherche du 12 octobre 2026. Sources web consultées listées en fin de document. Ce qui n'a pas pu être vérifié sur la source d'origine est marqué **[non vérifié]**.*
 
+## Positionnement (décision du propriétaire, 12 octobre 2026)
+
+neuro-lens **n'est pas une plateforme d'exercices notés** et ne cherche pas à concurrencer les outils de ce genre. Ce qui le distingue :
+
+1. **La visualisation, y compris en 3D**, de ce qu'on développe, sur son propre code.
+2. **La vulgarisation** : chaque élément expliqué en langage simple, avec les valeurs réelles du projet, pour comprendre toute la chaîne jusqu'en production.
+3. **L'architecture de chaque type de projet** : données → modèle → infrastructure → production.
+
+Conséquences sur ce document :
+
+- L'ordre de construction de la section 5 est révisé ci-dessous. Le mode défi reste une option, désactivée par défaut ; aucune autre mécanique de quiz, de score ou de classement ne sera ajoutée.
+- La recherche déconseillait d'ajouter des vues 3D (section 3, « À ne pas construire »). Le propriétaire en a décidé autrement : la 3D est la signature de l'outil. Règle retenue pour qu'elle reste utile : **en 3D, chaque dimension porte une information** (dans la carte de la chaîne, la hauteur d'une brique dit si elle existe).
+- Ce qui reste valable de la section 2 : faire comprendre en montrant l'état réel, sans rien de caché, et expliquer chaque chose isolément avant de les combiner.
+
+**Ordre de construction révisé**
+
+1. **Carte 3D de la chaîne** par type de projet (fait : ML classique, réseau de neurones, agent).
+2. **Poser les briques manquantes** de cette carte, en commençant par la chaîne de production des réseaux PyTorch (version figée, image, API, surveillance) et le réentraînement.
+3. **Architectures de référence** des autres types de projet : application LLM avec recherche documentaire (RAG), ajustement d'un modèle, traitement par lots.
+4. **Santé de l'entraînement couche par couche** et **transformer token par token** (capacités 1 et 3), en restant sur le principe « voir pour comprendre ».
+
 ## En bref
 
 1. **Un expert se distingue moins par le modèle que par ce qui l'entoure.** Tous les référentiels consultés (Google, Microsoft, Anthropic, OpenAI, OWASP) convergent : métriques définies avant le modèle, tests des données et de l'infrastructure, même code à l'entraînement et au service, surveillance, évaluations.

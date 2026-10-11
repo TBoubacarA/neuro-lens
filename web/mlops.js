@@ -29,7 +29,7 @@ function renderMLOps(root, res, ctx) {
   box.innerHTML = "";
   const ops = res.mlops;
   if (!ops) return;
-  const redraw = (next) => { if (next) res.mlops = next; renderMLOps(root, res, ctx); };
+  const redraw = (next) => { if (next) res.mlops = next; renderMLOps(root, res, ctx); if (typeof chainRefresh === "function") chainRefresh(); };
   const prod = ops.production, mon = ops.monitoring;
   const stale = prod && prod.run_key !== res.run_key;
 
@@ -370,6 +370,7 @@ function infraCard(prod) {
       body.appendChild(pre);
       pre.scrollTop = pre.scrollHeight;
     }
+    if (typeof chainRefresh === "function") chainRefresh(); // la carte de la chaîne suit l'image et le conteneur
     clearTimeout(opsInfraTimer);
     if (busy) opsInfraTimer = setTimeout(() => refresh("/api/infra/status"), 1000);
   };
