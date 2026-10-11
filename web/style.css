@@ -471,3 +471,10 @@ input.ops-drift { width: 160px; display: inline-block; margin: 0; }
 .outline span { color: var(--muted); overflow-wrap: anywhere; }
 .proj-lines { text-anchor: middle; fill: var(--muted); font-size: 9.5px; }
 .agent-node.test rect { stroke-dasharray: 4 3; }
+.llm-rules > div { display: grid; grid-template-columns: 18px auto 1fr; gap: 10px; padding: 4px 2px; border-top: 1px solid var(--border); font-size: 12px; align-items: baseline; }
+.llm-rules code { font-size: 11.5px; }
+.llm-rules span { color: var(--muted); }
+.llm-rules > div.ok b { color: var(--ok); }
+.llm-rules > div.ko b, .llm-rules > div.ko span { color: var(--danger); }
+.llm-table td.llm-ok { color: var(--ok); }
+.llm-table td.llm-ko { color: var(--danger); white-space: nowrap; }

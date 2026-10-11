@@ -10,10 +10,14 @@ Trois réglages facultatifs dans le code de l'éditeur :
   cas     = [{"question": "...", "attendu": "..."}, ...]            jeu d'évaluation : l'agent est noté dessus
   variantes = {"court": {"SYSTEM": "..."}, "détaillé": {"SYSTEM": "..."}}  versions à comparer : chaque
             variante remplace ces variables globales le temps de l'évaluation (prompt, outils, modèle...)
+  regles  = {"max_mots": 30, "interdit": ["je ne sais pas"], "doit_contenir": ["cm"], "format": "nombre",
+             "donnees_personnelles": True}                       garde-fous de sortie : la réponse est vérifiée
 """
 
 from __future__ import annotations
 
+import json
+import re
 import time
 from contextlib import contextmanager
 
@@ -192,7 +196,47 @@ def summary(tr: Trace, namespace: dict) -> dict:
         "tools": tools,
         "limits": tr.limits,
         "stopped": tr.stopped,
+        "rules": sorted(str(k) for k in namespace["regles"]) if isinstance(namespace.get("regles"), dict) else [],
     }
+
+
+PII = {
+    "une adresse e-mail": re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),
+    "un numéro de téléphone": re.compile(r"(?<!\d)(?:\+\d{1,3}[ .-]?)?(?:\(?\d{2,3}\)?[ .-]?){4,5}(?!\d)"),
+    "un IBAN": re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}\b"),
+}
+
+
+def check(answer, rules) -> list[dict]:
+    """Les garde-fous de sortie : chaque règle de `regles` que la réponse enfreint, avec le détail."""
+    if not isinstance(rules, dict):
+        return []
+    text = answer if isinstance(answer, str) else repr(answer)
+    low = text.lower()
+    out = []
+    if isinstance(rules.get("max_mots"), (int, float)) and len(text.split()) > rules["max_mots"]:
+        out.append({"regle": "max_mots", "detail": f"{len(text.split())} mots, au plus {int(rules['max_mots'])} attendus"})
+    for word in rules.get("interdit") or []:
+        if str(word).lower() in low:
+            out.append({"regle": "interdit", "detail": f"contient « {word} »"})
+    for word in rules.get("doit_contenir") or []:
+        if str(word).lower() not in low:
+            out.append({"regle": "doit_contenir", "detail": f"ne contient pas « {word} »"})
+    fmt = rules.get("format")
+    if fmt == "nombre" and not re.search(r"\d", text):
+        out.append({"regle": "format", "detail": "aucun nombre dans la réponse"})
+    elif fmt == "json":
+        try:
+            json.loads(text)
+        except (ValueError, TypeError):
+            out.append({"regle": "format", "detail": "ce n'est pas du JSON valide"})
+    elif fmt == "phrase" and not text.strip().endswith((".", "!", "?")):
+        out.append({"regle": "format", "detail": "la réponse ne finit pas par une ponctuation"})
+    if rules.get("donnees_personnelles"):
+        for what, pattern in PII.items():
+            if pattern.search(text):
+                out.append({"regle": "donnees_personnelles", "detail": f"contient {what}"})
+    return out
 
 
 def _normalize(text) -> str:
@@ -242,6 +286,7 @@ def _run_cases(graph, namespace: dict, cases: list, base: dict) -> list[dict]:
             "cost": _cost(tr.spans, prices),
             "duration": tr.now(),
             "stopped": stopped,
+            "violations": check(got, namespace.get("regles")),
         })
     return rows
 
@@ -279,6 +324,7 @@ def evaluate(graph, namespace: dict) -> dict | None:
         costs = [r["cost"] for r in rows]
         results.append({
             "name": str(name), "rows": rows, "passed": sum(r["ok"] for r in rows), "total": len(rows),
+            "clean": sum(1 for r in rows if not r["violations"]),
             "tokens": sum(r["tokens"] for r in rows), "calls": sum(r["calls"] for r in rows),
             "cost": None if any(c is None for c in costs) else round(sum(costs), 6),
             "duration": round(sum(r["duration"] for r in rows), 1),
