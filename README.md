@@ -48,9 +48,11 @@ Tant qu'on n'a pas cliqué sur « Entraîner », les poids sont aléatoires, mai
 
 Le modèle est entraîné sur `X`, `y` s'il ne l'est pas déjà. Le score affiché est mesuré sur ces mêmes données.
 
+Un curseur change le réglage principal du modèle (profondeur d'un arbre, nombre de voisins, `C`…) sans toucher au code, et une courbe compare le score sur les exemples appris et sur 30 % d'exemples mis de côté : on y voit où commence le sur-apprentissage.
+
 ### Agents LangGraph
 
-L'agent est exécuté pour de bon à partir de `state`. Le premier exemple remplace le modèle de langage par une fonction simple, pour tourner sans clé d'API.
+L'agent est exécuté pour de bon à partir de `state`. Un lecteur rejoue le déroulé pas à pas. Le premier exemple remplace le modèle de langage par une fonction simple, pour tourner sans clé d'API.
 
 L'exemple « Agent IA avec Claude » est piloté par un vrai modèle : Claude choisit lui-même ses outils (recherche, calculatrice) et on voit chaque appel dans le déroulé. Lance le serveur avec ta clé, puis clique sur « Lancer avec Claude » :
 

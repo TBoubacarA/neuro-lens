@@ -28,7 +28,7 @@ def _worker_loop(conn) -> None:
     conn.send("ready")  # importer PyTorch peut prendre plusieurs secondes : hors du délai
     trainer.preload()
     while True:
-        op, code, pixels, text, off, epoch = conn.recv()
+        op, code, pixels, text, off, epoch, override = conn.recv()
         try:
             if op == "train":
                 conn.send(train(code))
@@ -41,14 +41,14 @@ def _worker_loop(conn) -> None:
             elif op == "live":  # le code peut appeler un vrai modèle de langage (voir l'exemple agent)
                 os.environ["NEURO_LENS_LIVE"] = "1"
                 try:
-                    conn.send(analyze(code, pixels, text, off, epoch))
+                    conn.send(analyze(code, pixels, text, off, epoch, override))
                 finally:
                     os.environ.pop("NEURO_LENS_LIVE", None)
             elif op == "reset":
                 trainer.reset(code)
                 conn.send({"ok": True})
             else:
-                conn.send(analyze(code, pixels, text, off, epoch))
+                conn.send(analyze(code, pixels, text, off, epoch, override))
         except Exception as exc:  # noqa: BLE001
             conn.send({"ok": False, "error": str(exc), "line": None})
 
@@ -67,14 +67,14 @@ class Worker:
         self._proc.start()
         self._ready = False
 
-    def run(self, code: str, pixels, text=None, op: str = "analyze", off=None, epoch=None) -> dict:
+    def run(self, code: str, pixels, text=None, op: str = "analyze", off=None, epoch=None, override=None) -> dict:
         with self._lock:
             if not self._proc.is_alive():
                 self._start()
             if not self._ready:
                 self._conn.recv()
                 self._ready = True
-            self._conn.send((op, code, pixels, text, off, epoch))
+            self._conn.send((op, code, pixels, text, off, epoch, override))
             limit = LIVE_TIMEOUT_S if op == "live" else TIMEOUT_S
             if self._conn.poll(limit):
                 return self._conn.recv()
@@ -91,6 +91,7 @@ class AnalyzeRequest(BaseModel):
     off: list[list[int]] | None = None  # [couche, unité] éteintes à la main (« et si ? »)
     live: bool = False  # True : le code a le droit d'appeler un vrai modèle (payant)
     epoch: int | None = None  # montrer le réseau tel qu'il était après N époques
+    override: dict[str, float | int | None] | None = None  # réglage scikit-learn choisi au curseur
 
 
 worker: Worker | None = None
@@ -108,7 +109,8 @@ app = FastAPI(title="neuro-lens", lifespan=lifespan)
 
 @app.post("/api/analyze")
 def analyze_endpoint(req: AnalyzeRequest) -> dict:
-    return worker.run(req.code, req.pixels, req.text, op="live" if req.live else "analyze", off=req.off, epoch=req.epoch)
+    return worker.run(req.code, req.pixels, req.text, op="live" if req.live else "analyze",
+                      off=req.off, epoch=req.epoch, override=req.override)
 
 
 class CodeRequest(BaseModel):

@@ -45,6 +45,7 @@ let lastResult = null; // pour rejouer la construction
 let otherKind = false; // le dernier affichage réussi n'était pas un réseau PyTorch
 let lastInput = null; // aperçu de l'entrée, pour montrer son découpage en patchs
 let tokens = null;   // mots de la phrase d'entrée, quand le modèle lit du texte
+let mlOverride = null; // réglage scikit-learn choisi au curseur, à la place de celui du code
 let shownEpoch = null; // null = les derniers poids appris ; sinon le réseau après N époques
 
 // ---------- Éditeur ----------
@@ -60,7 +61,7 @@ function initEditor(initial) {
       ta.spellcheck = false;
       ta.value = initial;
       $("editor").appendChild(ta);
-      ta.addEventListener("input", schedule);
+      ta.addEventListener("input", codeChanged);
       ta.addEventListener("keyup", () => focusLine(lineOfTextarea(ta)));
       ta.addEventListener("click", () => focusLine(lineOfTextarea(ta)));
       editor = ta;
@@ -79,7 +80,7 @@ function initEditor(initial) {
         automaticLayout: true,
         scrollBeyondLastLine: false,
       });
-      editor.onDidChangeModelContent(schedule);
+      editor.onDidChangeModelContent(codeChanged);
       editor.onDidChangeCursorPosition((e) => focusLine(e.position.lineNumber));
       resolve();
     }, fallback);
@@ -176,6 +177,12 @@ $("seven").addEventListener("click", () => { pixels = null; paintPad(seven()); s
 
 // ---------- Analyse ----------
 
+// Le code a changé : le réglage fait au curseur ne vaut plus.
+function codeChanged() {
+  mlOverride = null;
+  schedule();
+}
+
 function schedule() {
   clearTimeout(timer);
   setStatus("…", "");
@@ -197,7 +204,7 @@ async function run(live = false) {
     const r = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: getCode(), pixels, text: $("text").value || null, off, live, epoch: shownEpoch }),
+      body: JSON.stringify({ code: getCode(), pixels, text: $("text").value || null, off, live, epoch: shownEpoch, override: mlOverride }),
     });
     res = await r.json();
   } catch (e) {
@@ -216,7 +223,7 @@ function renderOther(res) {
   $("prediction").innerHTML = "";
   if (res.kind === "ml") {
     setStatus(`${res.estimator} · ${res.n_samples} exemples`, "ok");
-    renderML($("layers"), res, highlightLine, revealLine);
+    renderML($("layers"), res, highlightLine, revealLine, (name, value) => { mlOverride = { [name]: value }; run(); });
   } else {
     setStatus(`agent · ${res.steps.length} passage${res.steps.length > 1 ? "s" : ""}`, res.stopped ? "err" : "ok");
     renderAgent($("layers"), res, highlightLine, revealLine, () => run(true));
@@ -629,7 +636,7 @@ const fromBase64 = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replac
   const select = $("examples");
   Object.keys(window.NEURO_EXAMPLES).forEach((name) => select.add(new Option(name, name)));
   $("relight").addEventListener("click", () => { off = []; run(); });
-  select.addEventListener("change", () => { off = []; $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
+  select.addEventListener("change", () => { off = []; mlOverride = null; $("text").value = ""; setCode(window.NEURO_EXAMPLES[select.value]); schedule(); });
   paintPad(seven());
   $("text").addEventListener("input", schedule);
   $("share").addEventListener("click", async () => {

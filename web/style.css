@@ -358,3 +358,7 @@ main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .arcs path { fill: none; stroke: var(--accent); }
 .arcs text { fill: var(--muted); font-size: 10px; }
 .tokens span.hover { outline: 2px solid var(--accent); }
+
+input.knob { accent-color: var(--accent); width: 100%; max-width: 420px; display: block; margin: 4px 0; }
+.steps > div.later { opacity: .3; }
+.steps > div.now { background: #4cd98a22; box-shadow: inset 3px 0 0 var(--ok); }

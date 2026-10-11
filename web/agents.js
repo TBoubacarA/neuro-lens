@@ -142,6 +142,37 @@ function renderAgent(root, res, onHover, onPick, onLive) {
   row("", "État de départ", res.start);
   res.steps.forEach((s, i) => row(i + 1, s.node, s.changes, byId.get(s.node)));
   row("", "État final", res.final);
+
+  // Lecteur : rejouer le déroulé pas à pas, l'étape en cours s'allume dans le schéma.
+  const lines = [...list.children], last = lines.length - 1;
+  let pos = last, timer = null;
+  const player = document.createElement("div");
+  player.className = "train-actions";
+  player.innerHTML = `<button data-do="play">▶ Rejouer pas à pas</button><button data-do="prev" class="small">◀</button>
+    <button data-do="next" class="small">▶</button><span class="meta"></span>`;
+  const show = (k) => {
+    pos = Math.max(0, Math.min(last, k));
+    lines.forEach((r, i) => { r.classList.toggle("now", i === pos && pos !== last); r.classList.toggle("later", i > pos); });
+    const step = res.steps[pos - 1];
+    markNode(svg, pos === last ? null : step ? step.node : "__start__");
+    player.querySelector("span").textContent = pos === last ? "" : pos === 0 ? "départ" : `passage ${pos} sur ${res.steps.length} : ${step.node}`;
+    if (pos !== last) lines[pos].scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+  const stop = () => { clearInterval(timer); timer = null; player.querySelector("[data-do=play]").textContent = "▶ Rejouer pas à pas"; };
+  player.addEventListener("click", (e) => {
+    const what = e.target.dataset.do;
+    if (what === "prev") { stop(); show(pos - 1); }
+    if (what === "next") { stop(); show(pos + 1); }
+    if (what !== "play") return;
+    if (timer) return stop();
+    e.target.textContent = "⏸ Pause";
+    show(0);
+    timer = setInterval(() => {
+      if (!list.isConnected || pos >= last) return stop(); // la carte a été redessinée, ou c'est fini
+      show(pos + 1);
+    }, 1100);
+  });
+  run.appendChild(player);
   run.appendChild(list);
   if (res.stopped) addText(run, "meta", res.stopped).classList.add("stopped");
   root.appendChild(run);

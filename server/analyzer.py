@@ -242,14 +242,14 @@ def _group_lines(code: str, model: nn.Module, layers: list[dict]) -> None:
             layer["line"] = line
 
 
-def _other_kinds(code: str, namespace: dict) -> dict:
+def _other_kinds(code: str, namespace: dict, override: dict | None = None) -> dict:
     """Ce qui n'est pas un réseau PyTorch : un modèle scikit-learn ou un agent LangGraph."""
     from server import agents, ml
 
     model, graph = namespace.get("model"), namespace.get("graph")
     try:
         if model is not None and ml.is_sklearn(model):
-            result = ml.describe(model, namespace)
+            result = ml.describe(model, namespace, override)
             name = "model"
         elif graph is not None and agents.is_langgraph(graph):
             result = agents.describe(graph, namespace, code)
@@ -334,7 +334,7 @@ def landscape(code: str) -> dict:
 
 
 def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None = None,
-            off: list[list[int]] | None = None, epoch: int | None = None) -> dict:
+            off: list[list[int]] | None = None, epoch: int | None = None, override: dict | None = None) -> dict:
     """Point d'entrée : code Python -> description des couches et de leurs sorties."""
     namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
     torch.manual_seed(0)  # mêmes poids de départ à chaque analyse : les vues ne sautent pas d'un trait à l'autre
@@ -345,7 +345,7 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
 
     model = namespace.get("model")
     if not isinstance(model, nn.Module):
-        return _other_kinds(code, namespace)
+        return _other_kinds(code, namespace, override)
 
     n_params = sum(p.numel() for p in model.parameters())
     if n_params > MAX_PARAMS:

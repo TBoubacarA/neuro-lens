@@ -374,3 +374,16 @@ def test_attack_and_landscape():
     assert land["path"][-1][:2] == [0.0, 0.0]  # le point actuel est au centre de la carte
     assert all(abs(u) <= land["radius"] and abs(v) <= land["radius"] for u, v, _ in land["path"])
     trainer.reset(code)
+
+
+def test_knob_shows_overfitting_and_can_be_overridden():
+    res = analyze(TREE)
+    knob = res["knob"]
+    assert knob["name"] == "max_depth" and knob["value"] == 3 and len(knob["train"]) == len(knob["values"]) == 12
+    assert knob["train"][-1] > knob["train"][0] and knob["train"][-1] >= knob["test"][-1]  # l'arbre profond colle aux données
+    deep = analyze(TREE, override={"max_depth": 8})
+    assert deep["knob"]["value"] == 8 and deep["tree"]["depth"] > res["tree"]["depth"]
+    assert analyze(TREE, override={"max_depth": 999, "criterion": "x"})["knob"]["value"] == 3  # valeurs hors liste ignorées
+    km = analyze("from sklearn.datasets import load_iris\nfrom sklearn.cluster import KMeans\n"
+                 "X = load_iris().data\nmodel = KMeans(n_clusters=3, n_init=3, random_state=0)\n")
+    assert len(km["knob"]["inertia"]) == 7 and km["knob"]["inertia"][0] > km["knob"]["inertia"][-1]

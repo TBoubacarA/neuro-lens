@@ -40,7 +40,77 @@ function addText(parent, cls, text) {
   return p;
 }
 
-function renderML(root, res, onHover, onPick) {
+// Le réglage principal du modèle au curseur, avec la courbe qui montre le sur-apprentissage.
+function knobCard(res, onKnob) {
+  const k = res.knob, W = 420, H = 190, padL = 34, padB = 22, padT = 10;
+  const card = mlCard("act", `Réglage : ${k.name}`, k.value === null ? "sans limite" : `${k.value}`);
+  const supervised = Boolean(k.train);
+  addText(card, "explain", supervised
+    ? `Déplace le curseur : le modèle est réentraîné avec cette valeur, sans toucher au code. La courbe bleue est le score sur les exemples appris, l'orange sur ${k.held_out} exemples mis de côté. Quand la bleue continue de monter et que l'orange redescend, le modèle apprend par cœur : c'est le sur-apprentissage.`
+    : k.inertia ? "Déplace le curseur pour changer le nombre de groupes. La courbe montre à quel point les points sont serrés autour de leur centre : là où elle fait un coude, ajouter des groupes n'apporte plus grand-chose."
+    : "Déplace le curseur : le modèle est réentraîné avec cette valeur, sans toucher au code.");
+  const at = k.values.indexOf(k.value);
+  const slider = document.createElement("input");
+  slider.type = "range"; slider.min = 0; slider.max = k.values.length - 1; slider.step = 1;
+  slider.value = at >= 0 ? at : k.values.length - 1;
+  slider.className = "knob";
+  slider.setAttribute("aria-label", k.name);
+  const label = addText(card, "meta", "");
+  const say = () => { label.textContent = `${k.name} = ${k.values[slider.value]}` + (at < 0 ? ` (dans le code : ${k.value === null ? "sans limite" : k.value})` : ""); };
+  say();
+  slider.addEventListener("input", say);
+  slider.addEventListener("change", () => { window.knobHadFocus = true; onKnob(k.name, k.values[slider.value]); });
+  card.insertBefore(slider, label);
+  if (window.knobHadFocus) { window.knobHadFocus = false; setTimeout(() => slider.focus(), 0); }
+
+  const series = supervised ? [[k.train, classColor(0), "exemples appris"], [k.test, classColor(3), "exemples mis de côté"]]
+    : k.inertia ? [[k.inertia, classColor(0), "dispersion (inertie)"]] : [];
+  if (!series.length) return card;
+  const [cv, ctx] = plotArea(W, H);
+  const all = series.flatMap((s) => s[0]);
+  const lo = supervised ? Math.min(0.5, ...all) : 0, hi = supervised ? 1 : Math.max(...all);
+  const x = (i) => padL + (i / Math.max(1, k.values.length - 1)) * (W - padL - 12);
+  const y = (v) => H - padB - ((v - lo) / (hi - lo || 1)) * (H - padB - padT);
+  ctx.font = "10px system-ui"; ctx.fillStyle = "#8b93a7"; ctx.strokeStyle = "#2a3142";
+  [lo, (lo + hi) / 2, hi].forEach((v) => {
+    ctx.beginPath(); ctx.moveTo(padL, y(v)); ctx.lineTo(W - 12, y(v)); ctx.stroke();
+    ctx.textAlign = "right"; ctx.fillText(supervised ? `${Math.round(v * 100)} %` : v.toFixed(0), padL - 4, y(v) + 3);
+  });
+  ctx.textAlign = "center";
+  k.values.forEach((v, i) => ctx.fillText(v, x(i), H - 6));
+  if (at >= 0) { // la valeur en cours
+    ctx.strokeStyle = "#e6e8ee"; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(x(at), padT); ctx.lineTo(x(at), H - padB); ctx.stroke(); ctx.setLineDash([]);
+  }
+  series.forEach(([values, color]) => {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+    values.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
+    ctx.stroke();
+    values.forEach((v, i) => { ctx.beginPath(); ctx.arc(x(i), y(v), i === at ? 4.5 : 2.5, 0, 2 * Math.PI); ctx.fill(); });
+  });
+  card.appendChild(cv);
+  card.appendChild(legendOf(series.map((s) => [s[2], s[1]])));
+  if (supervised) {
+    const best = k.test.indexOf(Math.max(...k.test));
+    addText(card, "meta", `Meilleur score sur les exemples mis de côté : ${(k.test[best] * 100).toFixed(1)} % avec ${k.name} = ${k.values[best]}` +
+      (at >= 0 ? ` · ici : ${(k.test[at] * 100).toFixed(1)} %` : ""));
+  }
+  return card;
+}
+
+function legendOf(pairs) {
+  const box = document.createElement("div");
+  box.className = "legend";
+  pairs.forEach(([name, color]) => {
+    const s = document.createElement("span");
+    s.innerHTML = `<i style="background:${color}"></i>`;
+    s.appendChild(document.createTextNode(name));
+    box.appendChild(s);
+  });
+  return box;
+}
+
+function renderML(root, res, onHover, onPick, onKnob) {
   root.innerHTML = "";
   const score = res.score === undefined ? null
     : res.task === "regression" ? `R² ${res.score.toFixed(3)}` : `${(res.score * 100).toFixed(1)} % de bonnes réponses`;
@@ -60,6 +130,7 @@ function renderML(root, res, onHover, onPick) {
   head.addEventListener("mouseleave", () => onHover(null));
   head.addEventListener("click", () => onPick(res.line));
   root.appendChild(head);
+  if (res.knob && onKnob) root.appendChild(knobCard(res, onKnob));
 
   if (res.scatter) root.appendChild(scatterCard(res));
   if (res.curve) root.appendChild(curveCard(res));

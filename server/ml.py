@@ -74,7 +74,60 @@ def _fitted(model) -> bool:
         return False
 
 
-def describe(model, namespace: dict) -> dict:
+LOGS = [0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30, 100]
+# Le réglage le plus parlant de chaque modèle, et les valeurs à essayer.
+KNOBS = {
+    "DecisionTreeClassifier": ("max_depth", list(range(1, 13))),
+    "DecisionTreeRegressor": ("max_depth", list(range(1, 13))),
+    "RandomForestClassifier": ("max_depth", list(range(1, 11))),
+    "RandomForestRegressor": ("max_depth", list(range(1, 11))),
+    "GradientBoostingClassifier": ("n_estimators", [1, 3, 10, 30, 100]),
+    "KNeighborsClassifier": ("n_neighbors", [1, 3, 5, 7, 11, 15, 21, 31]),
+    "KNeighborsRegressor": ("n_neighbors", [1, 3, 5, 7, 11, 15, 21, 31]),
+    "SVC": ("C", LOGS),
+    "LogisticRegression": ("C", LOGS),
+    "Ridge": ("alpha", LOGS),
+    "KMeans": ("n_clusters", list(range(2, 9))),
+}
+HELD_OUT = 0.3  # part des exemples mise de côté pour mesurer sans tricher
+
+
+def _knob(model, X, y, task: str) -> dict | None:
+    """Essaie plusieurs valeurs du réglage principal : score sur les exemples appris et sur des exemples mis de côté.
+
+    C'est ce qui fait voir le sur-apprentissage : la première courbe monte toujours, la seconde finit par redescendre.
+    """
+    import numpy as np
+    from sklearn.base import clone
+
+    core = _final(model)
+    if type(core).__name__ not in KNOBS:
+        return None
+    name, values = KNOBS[type(core).__name__]
+    path = f"{model.steps[-1][0]}__{name}" if hasattr(model, "steps") else name
+    current = core.get_params(deep=False).get(name)
+    knob: dict = {"name": name, "values": values, "value": current}
+    if task == "clustering":
+        knob["inertia"] = [round(float(clone(model).set_params(**{path: v}).fit(X).inertia_), 3) for v in values]
+        return knob
+    if y is None or len(X) < 20:
+        return knob
+    order = np.random.default_rng(0).permutation(len(X))
+    cut = int(len(X) * (1 - HELD_OUT))
+    a, b = order[:cut], order[cut:]
+    knob["train"], knob["test"] = [], []
+    for v in values:
+        if name == "n_neighbors" and v > len(a):
+            knob["values"] = values[: len(knob["train"])]
+            break
+        trial = clone(model).set_params(**{path: v}).fit(X[a], y[a])
+        knob["train"].append(round(float(trial.score(X[a], y[a])), 4))
+        knob["test"].append(round(float(trial.score(X[b], y[b])), 4))
+    knob["held_out"] = len(b)
+    return knob
+
+
+def describe(model, namespace: dict, override: dict | None = None) -> dict:
     import numpy as np
 
     X = namespace.get("X")
@@ -89,6 +142,14 @@ def describe(model, namespace: dict) -> dict:
     y = None if y is None else np.asarray(y)
     task = _task(model)
 
+    if override:  # réglage choisi au curseur : on remplace la valeur du code et on réentraîne
+        name, values = KNOBS.get(type(_final(model)).__name__, (None, []))
+        override = {k: v for k, v in override.items() if k == name and v in values}
+    if override:
+        from sklearn.base import clone
+
+        path = f"{model.steps[-1][0]}__" if hasattr(model, "steps") else ""
+        model = clone(model).set_params(**{path + k: v for k, v in override.items()})
     trained_here = not _fitted(model)
     if trained_here:
         model.fit(X) if y is None or task == "clustering" else model.fit(X, y)
@@ -123,6 +184,9 @@ def describe(model, namespace: dict) -> dict:
         result["classes"] = classes
     if y is not None and task != "clustering":
         result["score"] = round(float(model.score(X, y)), 4)
+    knob = _knob(model, X, y, task)
+    if knob:
+        result["knob"] = knob
 
     # Le nuage de points : les 2 colonnes si elles suffisent, sinon une projection ACP.
     rng = np.random.default_rng(0)
