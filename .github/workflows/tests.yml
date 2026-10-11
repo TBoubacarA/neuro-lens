@@ -1,0 +1,25 @@
+# Intégration continue : à chaque push et à chaque pull request, GitHub installe le projet
+# sur une machine neuve et lance les tests. Une PR dont les tests échouent se voit tout de suite.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Installer les dépendances
+        # PyTorch en version processeur seul : bien plus léger que la version avec carte graphique
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lancer les tests
+        run: pytest -q

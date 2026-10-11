@@ -526,3 +526,16 @@ def test_agentops_trace_counts_tokens_and_cost_live(monkeypatch):
     assert capped["ops"]["calls"] == 1 and "Garde-fou" in capped["ops"]["stopped"] and "Garde-fou" in capped["stopped"]
     assert all(r["calls"] == 1 and not r["ok"] and "Garde-fou" in r["stopped"] for r in capped["ops"]["eval"]["rows"])
     assert BetaMessages.create is create  # les patches de la trace sont bien retirés
+
+
+def test_infra_explains_what_is_missing(tmp_path, monkeypatch):
+    from server import infra
+
+    monkeypatch.setenv("NEURO_LENS_HOME", str(tmp_path))
+    monkeypatch.setattr(infra, "_job", {"phase": "idle", "log": []})
+    monkeypatch.setattr(infra.shutil, "which", lambda _name: None)  # machine sans Docker
+    assert "Docker n'est pas installé" in infra.build()["error"]
+    monkeypatch.setattr(infra, "available", lambda: None)  # Docker présent, mais rien n'est déployé
+    assert "déploie d'abord" in infra.build()["error"]
+    assert infra.status()["infra"]["phase"] == "idle"
+    assert not infra.predict([[0.0, 0.0]])["ok"]  # aucun conteneur lancé
