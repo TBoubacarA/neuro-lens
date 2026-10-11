@@ -23,7 +23,8 @@ LIVE_TIMEOUT_S = 120  # un agent piloté par un vrai modèle de langage attend s
 
 def _worker_loop(conn) -> None:
     from server import trainer
-    from server.analyzer import analyze, attack, dream, landscape, train
+    from server import mlops
+    from server.analyzer import analyze, attack, deploy, dream, landscape, train
 
     conn.send("ready")  # importer PyTorch peut prendre plusieurs secondes : hors du délai
     trainer.preload()
@@ -38,6 +39,12 @@ def _worker_loop(conn) -> None:
                 conn.send(attack(code, pixels, epoch))  # epoch porte ici le chiffre visé
             elif op == "landscape":
                 conn.send(landscape(code))
+            elif op == "deploy":
+                conn.send(deploy(code, override))
+            elif op == "predict":  # `override` porte ici la demande
+                conn.send(mlops.predict(override["rows"]))
+            elif op == "simulate":
+                conn.send(mlops.simulate(override["n"], override["drift"]))
             elif op == "live":  # le code peut appeler un vrai modèle de langage (voir l'exemple agent)
                 os.environ["NEURO_LENS_LIVE"] = "1"
                 try:
@@ -145,6 +152,38 @@ def attack_endpoint(req: AttackRequest) -> dict:
 def landscape_endpoint(req: CodeRequest) -> dict:
     """Le paysage de l'erreur autour des poids actuels, avec le chemin de l'entraînement."""
     return worker.run(req.code, None, op="landscape")
+
+
+class DeployRequest(BaseModel):
+    code: str
+    override: dict[str, float | int | None] | None = None
+
+
+@app.post("/api/deploy")
+def deploy_endpoint(req: DeployRequest) -> dict:
+    """Fige le modèle scikit-learn du code dans une nouvelle version et la met en production."""
+    return worker.run(req.code, None, op="deploy", override=req.override)
+
+
+class PredictRequest(BaseModel):
+    rows: list[list[float]]
+
+
+@app.post("/api/predict")
+def predict_endpoint(req: PredictRequest) -> dict:
+    """Le service de prédiction : répond avec la version en production."""
+    return worker.run("", None, op="predict", override={"rows": req.rows})
+
+
+class SimulateRequest(BaseModel):
+    n: int = 200
+    drift: float = 0.0
+
+
+@app.post("/api/simulate")
+def simulate_endpoint(req: SimulateRequest) -> dict:
+    """Envoie de fausses requêtes de production, plus ou moins éloignées des données d'entraînement."""
+    return worker.run("", None, op="simulate", override={"n": req.n, "drift": req.drift})
 
 
 @app.post("/api/reset")

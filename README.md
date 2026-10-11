@@ -50,6 +50,19 @@ Le modèle est entraîné sur `X`, `y` s'il ne l'est pas déjà. Le score affich
 
 Un curseur change le réglage principal du modèle (profondeur d'un arbre, nombre de voisins, `C`…) sans toucher au code, et une courbe compare le score sur les exemples appris et sur 30 % d'exemples mis de côté : on y voit où commence le sur-apprentissage.
 
+#### De l'essai à la production (chaîne MLOps)
+
+Sous le modèle, six étapes réelles, qui tournent sur ta machine :
+
+1. **Données** : une empreinte courte ; si elle change, ce ne sont plus les mêmes données.
+2. **Entraînement** : le modèle et son réglage.
+3. **Suivi des essais** : chaque combinaison modèle + réglage + données essayée est notée avec ses scores.
+4. **Versions** : « Déployer » fige le modèle dans une version numérotée et écrit son dossier sous `.neuro-lens/models/vN/` : `model.joblib`, `model_card.json`, `serve.py` (service FastAPI), `Dockerfile`, `requirements.txt`.
+5. **API de prédiction** : `POST /api/predict` répond avec la version en production ; la commande `curl` équivalente est affichée.
+6. **Surveillance** : latence, bonnes réponses et dérive des données reçues (indice PSI par colonne). Un curseur simule un monde qui change, jusqu'à l'alerte.
+
+Le dossier d'une version se lance seul : `cd .neuro-lens/models/v1 && uvicorn serve:app --port 8080`.
+
 ### Agents LangGraph
 
 L'agent est exécuté pour de bon à partir de `state`. Un lecteur rejoue le déroulé pas à pas. Le premier exemple remplace le modèle de langage par une fonction simple, pour tourner sans clé d'API.
@@ -99,6 +112,7 @@ server/
   app.py       serveur FastAPI ; exécute le code dans un processus séparé (limite de 10 s, 120 s pour un agent piloté par Claude)
   analyzer.py  réseaux PyTorch : capture la sortie de chaque couche et le trajet des données
   ml.py        modèles scikit-learn
+  mlops.py     suivi des essais, versions, service de prédiction, surveillance
   agents.py    agents LangGraph
   llmops.py    trace des agents, tokens et coût, garde-fou, évaluation sur un jeu de cas
 tests/

@@ -127,6 +127,9 @@ def _knob(model, X, y, task: str) -> dict | None:
     return knob
 
 
+LAST: dict = {}  # dernier modèle décrit avec ses données (voir server/mlops.py)
+
+
 def describe(model, namespace: dict, override: dict | None = None) -> dict:
     import numpy as np
 
@@ -247,4 +250,9 @@ def describe(model, namespace: dict, override: dict | None = None) -> dict:
         result["coefficients"] = _bars(coef if coef.ndim == 1 else coef[0], names)
         if coef.ndim == 2 and coef.shape[0] > 1:
             result["coefficients_of"] = classes[0] if classes else None
+    from server import mlops
+
+    result["data_id"] = mlops.fingerprint(X, y)
+    LAST.clear()
+    LAST.update({"model": model, "X": X, "y": y})  # le modèle entraîné, pour le déployer tel quel
     return result

@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# neuro-lens : versions de modèles, dossiers de déploiement
+.neuro-lens/
