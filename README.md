@@ -144,6 +144,10 @@ tests/
 
 Le serveur exécute le code tapé dans l'éditeur : il est fait pour tourner sur ta machine (il n'écoute que sur 127.0.0.1), pas pour être exposé sur Internet.
 
+## Feuille de route
+
+La recherche sur ce qu'un ingénieur IA expert doit maîtriser, sur la façon dont on le devient et sur ce que font les outils existants est dans [docs/recherche-experts-ia.md](docs/recherche-experts-ia.md), avec le parcours expert en 8 niveaux et l'ordre de construction proposé.
+
 ## Pistes
 
 - Afficher aussi les opérations fonctionnelles (`F.relu`) appelées dans `forward`.
