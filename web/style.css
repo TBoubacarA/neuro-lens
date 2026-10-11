@@ -448,6 +448,7 @@ input.ops-drift { width: 160px; display: inline-block; margin: 0; }
 /* Vue Projet : explorateur à gauche du code, onglets, plan, dépendances */
 .code-pane { flex-direction: row; }
 .explorer { width: 230px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
+.explorer[hidden], .tabs[hidden] { display: none; }
 .explorer select { margin: 8px; font-size: 12px; }
 .project-tree { overflow: auto; flex: 1; font-size: 12.5px; padding-bottom: 12px; }
 .tree-row { display: flex; align-items: center; gap: 6px; padding: 3px 8px; cursor: pointer; white-space: nowrap; }
