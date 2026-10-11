@@ -195,3 +195,123 @@ def dream(code: str, model: nn.Module) -> dict:
         "confidence": [round(float(probs[i, i]), 3) for i in range(10)],
         "epochs": len(entry["epochs"]) if entry else 0,
     }
+
+
+ATTACK_STEPS = 40
+ATTACK_EPS = 0.25  # chaque pixel bouge d'au plus 25 % : presque invisible à l'œil
+
+
+def attack(code: str, model: nn.Module, pixels, target: int) -> dict:
+    """Tromper le réseau : retoucher à peine le dessin pour qu'il y lise le chiffre `target`."""
+    reason = can_train(model)
+    if reason:
+        return {"ok": False, "error": reason, "line": None}
+    entry = _trained.get(code)
+    if entry:
+        model.load_state_dict(entry["state"])
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad_(False)
+    x0 = torch.tensor(pixels, dtype=torch.float32).view(1, 1, 28, 28)
+    with torch.no_grad():
+        before = torch.softmax(model(x0)[0], dim=0)
+    x = x0.clone()
+    y = torch.tensor([target])
+    for _ in range(ATTACK_STEPS):  # descente de gradient projetée (PGD) sur l'image, pas sur les poids
+        x.requires_grad_(True)
+        loss = F.cross_entropy(model(x), y)
+        (grad,) = torch.autograd.grad(loss, x)
+        with torch.no_grad():
+            x = x - 0.02 * grad.sign()
+            x = (x0 + (x - x0).clamp(-ATTACK_EPS, ATTACK_EPS)).clamp(0, 1)
+        with torch.no_grad():
+            if int(model(x).argmax()) == target and _ > 5:
+                break
+    with torch.no_grad():
+        after = torch.softmax(model(x)[0], dim=0)
+    delta = (x - x0)[0, 0]
+    return {
+        "ok": True,
+        "original": [[round(v, 3) for v in row] for row in x0[0, 0].tolist()],
+        "image": [[round(v, 3) for v in row] for row in x[0, 0].tolist()],
+        "delta": [[round(v, 3) for v in row] for row in (delta / ATTACK_EPS).tolist()],  # entre -1 et 1
+        "before": {"probs": [round(v, 4) for v in before.tolist()], "top": int(before.argmax())},
+        "after": {"probs": [round(v, 4) for v in after.tolist()], "top": int(after.argmax())},
+        "max_change": round(float(delta.abs().max()), 3),
+        "fooled": int(after.argmax()) == target,
+    }
+
+
+LANDSCAPE_N = 17  # points par côté de la carte
+LANDSCAPE_SAMPLES = 256
+
+
+def _directions(model: nn.Module) -> list[tuple[torch.Tensor, torch.Tensor]]:
+    """Deux directions aléatoires dans l'espace des poids, mises à l'échelle de chaque filtre/neurone."""
+    g = torch.Generator().manual_seed(1)
+    out = []
+    for p in model.parameters():
+        d1, d2 = torch.randn(p.shape, generator=g), torch.randn(p.shape, generator=g)
+        if p.dim() > 1:
+            flat = p.detach().flatten(1).norm(dim=1).view(-1, *[1] * (p.dim() - 1))
+            d1 = d1 / d1.flatten(1).norm(dim=1).view_as(flat).clamp_min(1e-9) * flat
+            d2 = d2 / d2.flatten(1).norm(dim=1).view_as(flat).clamp_min(1e-9) * flat
+        else:
+            d1, d2 = torch.zeros_like(p), torch.zeros_like(p)  # on ne bouge pas les biais
+        out.append((d1, d2))
+    return out
+
+
+def landscape(code: str, model: nn.Module) -> dict:
+    """Le paysage de l'erreur autour des poids actuels, et le chemin suivi par l'entraînement.
+
+    Les deux axes sont les directions principales (ACP) du chemin parcouru par les poids pendant
+    l'entraînement : le chemin est donc dessiné dans le plan où il bouge vraiment. Avant
+    l'entraînement, on prend deux directions aléatoires mises à l'échelle de chaque filtre.
+    """
+    reason = can_train(model)
+    if reason:
+        return {"ok": False, "error": reason, "line": None}
+    data = _load()
+    entry = _trained.get(code)
+    if entry:
+        model.load_state_dict(entry["state"])
+    model.eval()
+    params = list(model.parameters())
+    names = [n for n, _ in model.named_parameters()]
+    center = [p.detach().clone() for p in params]
+    x, y = data["x"][:LANDSCAPE_SAMPLES], data["y"][:LANDSCAPE_SAMPLES]
+
+    path = []
+    states = entry["states"] if entry else []
+    if len(states) >= 3:
+        deltas = torch.stack([torch.cat([(st[n] - c).flatten() for n, c in zip(names, center)]) for st in states])
+        _, _, vt = torch.linalg.svd(deltas, full_matrices=False)
+        axes = vt[:2]
+        if axes.shape[0] < 2:  # chemin en ligne droite : on ajoute un axe perpendiculaire quelconque
+            axes = torch.cat([axes, torch.randn(1, axes.shape[1], generator=torch.Generator().manual_seed(1))])
+        coords = deltas @ axes.T
+        path = [[round(float(u), 5), round(float(v), 5), k] for k, (u, v) in enumerate(coords.tolist())]
+        dirs, start = [], 0
+        for c in center:
+            n = c.numel()
+            dirs.append((axes[0, start : start + n].view_as(c), axes[1, start : start + n].view_as(c)))
+            start += n
+        radius = 1.3 * max(max(abs(a), abs(b)) for a, b, _ in path) or 1.0
+    else:
+        dirs = _directions(model)
+        radius = 1.0
+
+    ticks = torch.linspace(-radius, radius, LANDSCAPE_N)
+    grid = []
+    with torch.no_grad():
+        for b in ticks:
+            row = []
+            for a in ticks:
+                for p, c, (d1, d2) in zip(params, center, dirs):
+                    p.copy_(c + a * d1 + b * d2)
+                row.append(round(float(F.cross_entropy(model(x), y)), 4))
+            grid.append(row)
+        for p, c in zip(params, center):
+            p.copy_(c)
+    return {"ok": True, "grid": grid, "radius": radius, "path": path, "n_samples": len(y), "pca": len(states) >= 3}

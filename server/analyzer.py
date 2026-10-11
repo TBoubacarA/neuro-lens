@@ -301,6 +301,38 @@ def dream(code: str) -> dict:
         return {"ok": False, "error": _explain(exc), "line": _error_line(exc)}
 
 
+def _with_model(code: str, fn):
+    """Exécute le code, puis applique `fn(model)` au réseau PyTorch qu'il définit."""
+    from server import trainer  # noqa: F401 - importé pour les helpers qui s'en servent
+
+    namespace: dict = {"torch": torch, "nn": nn, "F": nn.functional, "__name__": "__neuro_lens__"}
+    torch.manual_seed(0)
+    try:
+        exec(compile(code, FILENAME, "exec"), namespace)
+        model = namespace.get("model")
+        if not isinstance(model, nn.Module):
+            return {"ok": False, "error": "Cette vue marche pour les réseaux PyTorch.", "line": None}
+        return fn(model)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": _explain(exc), "line": _error_line(exc)}
+
+
+def attack(code: str, pixels, target: int) -> dict:
+    """Tromper le réseau : une retouche presque invisible du dessin (voir server/trainer.py)."""
+    from server import trainer
+
+    if pixels is None:
+        pixels = default_input()[0, 0].tolist()
+    return _with_model(code, lambda model: trainer.attack(code, model, pixels, int(target)))
+
+
+def landscape(code: str) -> dict:
+    """Le paysage de l'erreur autour des poids, et le chemin de l'entraînement (voir server/trainer.py)."""
+    from server import trainer
+
+    return _with_model(code, lambda model: trainer.landscape(code, model))
+
+
 def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None = None,
             off: list[list[int]] | None = None, epoch: int | None = None) -> dict:
     """Point d'entrée : code Python -> description des couches et de leurs sorties."""

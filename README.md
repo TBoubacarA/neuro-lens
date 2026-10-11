@@ -37,6 +37,9 @@ Ce que la page montre dépend de ce que le code définit :
 - **Ce que le réseau imagine** : pour chaque chiffre, l'image qui le convainc le plus (à refaire après l'entraînement).
 - **Entraînement en direct** : le bouton « Entraîner » fait apprendre le réseau sur 1 437 vrais chiffres manuscrits (load_digits de scikit-learn, rien à télécharger). Une courbe montre l'erreur baisser, le taux de réussite sur des chiffres jamais vus s'affiche après chaque époque, et toutes les vues passent aux poids appris.
 - **Revoir l'apprentissage** : un curseur remet le réseau dans l'état où il était après chaque époque (0 = avant d'apprendre) ; toutes les vues suivent. Une matrice de confusion montre quel chiffre il confond avec quel autre, et un clic sur un des chiffres qu'il rate l'envoie dans la zone d'entrée pour voir pourquoi.
+- **Tromper le réseau** : une attaque adverse. On retouche le dessin de façon presque invisible (chaque pixel bouge d'au plus 25 %) jusqu'à ce que le réseau y lise le chiffre choisi ; on voit la retouche, la réponse avant et après.
+- **Paysage de l'erreur** : une carte de l'erreur autour des poids actuels, avec le chemin suivi par l'entraînement époque par époque (axes : les deux directions principales du chemin).
+- **Arcs d'attention** (modèles de texte) : survole un mot de la phrase pour voir à quels mots il prête attention.
 - **Partager** : le bouton en haut copie un lien qui contient le code de l'éditeur.
 
 Tant qu'on n'a pas cliqué sur « Entraîner », les poids sont aléatoires, mais les formes, les filtres et le trajet des données sont réels.

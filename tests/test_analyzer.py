@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from server.analyzer import analyze
+from server.analyzer import analyze, train
 
 CNN = """import torch.nn as nn
 model = nn.Sequential(
@@ -353,3 +353,24 @@ def test_dream_returns_one_image_per_digit():
     assert res["ok"] and len(res["images"]) == 10 and len(res["images"][0]) == 28
     assert len(res["confidence"]) == 10 and res["epochs"] == 0
     assert not dream(TRANSFORMER)["ok"]
+
+
+def test_attack_and_landscape():
+    from server import trainer
+    from server.analyzer import attack, landscape
+
+    code = CNN.replace("model =", "torch.manual_seed(0)\nmodel =")
+    flat = landscape(code)
+    assert flat["ok"] and not flat["pca"] and flat["path"] == [] and len(flat["grid"]) == 17
+    for _ in range(3):
+        train(code)
+    before = analyze(code)["prediction"]["top"]
+    target = (before + 1) % 10
+    hit = attack(code, None, target)
+    assert hit["ok"] and hit["before"]["top"] == before and hit["max_change"] <= trainer.ATTACK_EPS + 1e-6
+    assert all(0 <= v <= 1 for row in hit["image"] for v in row) and len(hit["original"]) == 28
+    land = landscape(code)
+    assert land["ok"] and land["pca"] and [p[2] for p in land["path"]] == [0, 1, 2, 3]
+    assert land["path"][-1][:2] == [0.0, 0.0]  # le point actuel est au centre de la carte
+    assert all(abs(u) <= land["radius"] and abs(v) <= land["radius"] for u, v, _ in land["path"])
+    trainer.reset(code)

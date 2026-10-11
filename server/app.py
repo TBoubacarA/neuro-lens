@@ -23,7 +23,7 @@ LIVE_TIMEOUT_S = 120  # un agent piloté par un vrai modèle de langage attend s
 
 def _worker_loop(conn) -> None:
     from server import trainer
-    from server.analyzer import analyze, dream, train
+    from server.analyzer import analyze, attack, dream, landscape, train
 
     conn.send("ready")  # importer PyTorch peut prendre plusieurs secondes : hors du délai
     trainer.preload()
@@ -34,6 +34,10 @@ def _worker_loop(conn) -> None:
                 conn.send(train(code))
             elif op == "dream":
                 conn.send(dream(code))
+            elif op == "attack":
+                conn.send(attack(code, pixels, epoch))  # epoch porte ici le chiffre visé
+            elif op == "landscape":
+                conn.send(landscape(code))
             elif op == "live":  # le code peut appeler un vrai modèle de langage (voir l'exemple agent)
                 os.environ["NEURO_LENS_LIVE"] = "1"
                 try:
@@ -121,6 +125,24 @@ def train_endpoint(req: CodeRequest) -> dict:
 def dream_endpoint(req: CodeRequest) -> dict:
     """Pour chaque chiffre, l'image que le réseau trouve la plus convaincante."""
     return worker.run(req.code, None, op="dream")
+
+
+class AttackRequest(BaseModel):
+    code: str
+    pixels: list[list[float]] | None = None
+    target: int
+
+
+@app.post("/api/attack")
+def attack_endpoint(req: AttackRequest) -> dict:
+    """Retouche à peine le dessin pour que le réseau y lise le chiffre visé."""
+    return worker.run(req.code, req.pixels, op="attack", epoch=req.target)
+
+
+@app.post("/api/landscape")
+def landscape_endpoint(req: CodeRequest) -> dict:
+    """Le paysage de l'erreur autour des poids actuels, avec le chemin de l'entraînement."""
+    return worker.run(req.code, None, op="landscape")
 
 
 @app.post("/api/reset")

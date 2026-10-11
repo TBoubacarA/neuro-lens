@@ -212,7 +212,7 @@ function renderOther(res) {
   lastLayers = [];
   lastShape = "";
   tokens = null;
-  ["input-card", "graph-card", "blocks-card", "depth-card", "train-card", "dream-card"].forEach((id) => { $(id).hidden = true; });
+  ["input-card", "graph-card", "blocks-card", "depth-card", "train-card", "dream-card", "attack-card", "landscape-card"].forEach((id) => { $(id).hidden = true; });
   $("prediction").innerHTML = "";
   if (res.kind === "ml") {
     setStatus(`${res.estimator} · ${res.n_samples} exemples`, "ok");
@@ -248,6 +248,8 @@ function render(res) {
     renderNetwork(res, build);
     renderPrediction(res.prediction, res.training);
     renderTraining(res);
+    renderExplore(res);
+    renderArcs(res);
   } else {
     err.hidden = false;
     err.textContent = (res.line ? `Ligne ${res.line} : ` : "") + res.error;
@@ -302,6 +304,42 @@ function paintSaliency(image, saliency) {
     data.data.set([base + hot * (255 - base), base + hot * (150 - base), base * (1 - hot), 255], i * 4);
   });
   ctx.putImageData(data, 0, 0);
+}
+
+// Arcs d'attention entre les mots de la phrase : survoler un mot montre à qui il prête attention.
+function renderArcs(res) {
+  const svg = $("arcs");
+  const attn = res.layers.find((l) => l.preview && l.preview.attention);
+  const chips = [...$("tokens").children];
+  const show = Boolean(attn && tokens && chips.length > 1);
+  $("arcs-hint").hidden = !show;
+  svg.toggleAttribute("hidden", !show); // un <svg> n'a pas la propriété .hidden des éléments HTML
+  if (!show) return;
+  const heads = attn.preview.attention;
+  const n = Math.min(chips.length, heads[0].length);
+  const mean = (i, j) => heads.reduce((acc, h) => acc + (h[i]?.[j] ?? 0), 0) / heads.length;
+  const box = $("tokens").getBoundingClientRect();
+  const W = box.width, H = 70;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.style.height = `${H}px`;
+  const cx = (k) => { const r = chips[k].getBoundingClientRect(); return r.left - box.left + r.width / 2; };
+  const draw = (i) => {
+    let html = "";
+    for (let j = 0; j < n; j++) {
+      const w = mean(i, j);
+      if (w < 0.03) continue;
+      const a = cx(i), b = cx(j), mid = (a + b) / 2, lift = Math.min(H - 6, Math.abs(b - a) * 0.5 + 10);
+      html += `<path d="M${a},4 Q${mid},${4 + lift} ${b},4" stroke-width="${(0.5 + 5 * w).toFixed(1)}" opacity="${(0.25 + 0.75 * w).toFixed(2)}"/>`;
+      html += `<text x="${b}" y="${H - 4}" text-anchor="middle">${Math.round(w * 100)} %</text>`;
+    }
+    svg.innerHTML = html;
+  };
+  chips.forEach((c, i) => {
+    c.onmouseenter = () => { chips.forEach((o) => o.classList.remove("hover")); c.classList.add("hover"); draw(i); };
+  });
+  $("tokens").onmouseleave = () => { chips.forEach((o) => o.classList.remove("hover")); svg.innerHTML = ""; };
+  draw(0);
+  chips[0].classList.add("hover");
 }
 
 function renderNetwork(res, build) {

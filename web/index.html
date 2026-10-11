@@ -31,6 +31,8 @@
           <p class="hint">Écris une phrase : chaque mot devient un token, puis un vecteur.</p>
           <input id="text" type="text" spellcheck="false" aria-label="Phrase d'entrée">
           <div id="tokens" class="tokens"></div>
+          <svg id="arcs" class="arcs" hidden></svg>
+          <p class="hint" id="arcs-hint" hidden>Survole un mot : les arcs montrent à qui il prête attention (moyenne des têtes de la première couche d'attention).</p>
         </div>
         <p class="hint" id="pad-hint">Dessine un chiffre : le réseau se recalcule à chaque trait.</p>
         <div class="input-row" id="pad-row">
@@ -105,6 +107,32 @@
       </div>
       <div id="layers"></div>
       <div id="prediction"></div>
+      <div class="card train-card" id="attack-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Tromper le réseau</span>
+          <span class="shape" id="attack-shape"></span>
+        </div>
+        <p class="hint">Une retouche presque invisible du dessin suffit souvent à changer la réponse. On cherche, pixel par pixel, la plus petite modification qui fait lire un autre chiffre : c'est une « attaque adverse », la raison pour laquelle on ne fait pas confiance aveuglément à un réseau.</p>
+        <div class="train-actions">
+          <label for="attack-target">Lui faire lire un</label>
+          <select id="attack-target"></select>
+          <button id="attack-go">Le tromper</button>
+          <span id="attack-status" class="meta"></span>
+        </div>
+        <div id="attack-result" class="attack"></div>
+      </div>
+      <div class="card train-card" id="landscape-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Paysage de l'erreur</span>
+          <span class="shape" id="landscape-shape"></span>
+        </div>
+        <p class="hint">Apprendre, c'est descendre une vallée : chaque point de cette carte est un réglage possible des poids, et sa couleur l'erreur que le réseau ferait avec (sombre = faible). Après entraînement, le chemin blanc est celui que l'apprentissage a suivi, époque par époque, jusqu'au point actuel ◎.</p>
+        <div class="train-actions">
+          <button id="landscape-go">Dessiner le paysage</button>
+          <span id="landscape-status" class="meta"></span>
+        </div>
+        <div id="landscape" class="landscape"></div>
+      </div>
     </section>
   </main>
 
@@ -117,6 +145,7 @@
   <script src="/static/depth.js"></script>
   <script src="/static/train.js"></script>
   <script src="/static/dream.js"></script>
+  <script src="/static/explore.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
