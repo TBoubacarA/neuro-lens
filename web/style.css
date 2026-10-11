@@ -393,3 +393,8 @@ input.knob { accent-color: var(--accent); width: 100%; max-width: 420px; display
 .llm-table tr.ko td:first-child { color: var(--danger); font-weight: 700; }
 .shape.llm-good { color: var(--ok); }
 .shape.llm-bad { color: var(--danger); }
+.llm-compare td.bar { min-width: 120px; }
+.llm-compare td.bar .llm-score { margin: 5px 0; }
+.llm-compare tr.best td { background: #4cd98a14; }
+.llm-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 4px; }
+.llm-tabs button.on { border-color: var(--accent); color: var(--accent); }

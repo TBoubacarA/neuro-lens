@@ -8,6 +8,8 @@ Trois réglages facultatifs dans le code de l'éditeur :
   PRIX    = {"claude-opus-5-5": {"entree": 5.0, "sortie": 25.0}}  dollars par million de tokens
   LIMITES = {"appels": 8, "tokens": 20000}                         garde-fou : l'agent s'arrête au-delà
   cas     = [{"question": "...", "attendu": "..."}, ...]            jeu d'évaluation : l'agent est noté dessus
+  variantes = {"court": {"SYSTEM": "..."}, "détaillé": {"SYSTEM": "..."}}  versions à comparer : chaque
+            variante remplace ces variables globales le temps de l'évaluation (prompt, outils, modèle...)
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from contextlib import contextmanager
 MAX_TEXT = 160
 DEFAULT_LIMITS = {"appels": 12, "tokens": 200_000}  # même sans LIMITES : on protège le porte-monnaie
 MAX_CASES = 8
+MAX_VARIANTS = 4
 EVAL_STEPS = 40
 
 
@@ -205,14 +208,7 @@ def _answer(final: dict):
     return texts[-1] if texts else ""
 
 
-def evaluate(graph, namespace: dict) -> dict | None:
-    """Fait tourner l'agent sur chaque cas de `cas` et le note : la réponse attendue doit s'y trouver."""
-    cases = namespace.get("cas")
-    base = namespace.get("state")
-    if not isinstance(cases, list) or not isinstance(base, dict):
-        return None
-    if hasattr(graph, "compile"):
-        graph = graph.compile()
+def _run_cases(graph, namespace: dict, cases: list, base: dict) -> list[dict]:
     prices = _prices(namespace)
     rows = []
     for case in cases[:MAX_CASES]:
@@ -247,5 +243,47 @@ def evaluate(graph, namespace: dict) -> dict | None:
             "duration": tr.now(),
             "stopped": stopped,
         })
-    passed = sum(r["ok"] for r in rows)
-    return {"rows": rows, "passed": passed, "total": len(rows), "skipped": max(0, len(cases) - MAX_CASES)}
+    return rows
+
+
+_MISSING = object()
+
+
+def evaluate(graph, namespace: dict) -> dict | None:
+    """Fait tourner l'agent sur chaque cas de `cas` et le note : la réponse attendue doit s'y trouver.
+
+    Avec `variantes`, chaque variante est évaluée à son tour, ses variables globales remplaçant celles du
+    code le temps de ses cas : c'est ainsi qu'on compare deux prompts ou deux modèles sur le même jeu.
+    """
+    cases = namespace.get("cas")
+    base = namespace.get("state")
+    if not isinstance(cases, list) or not isinstance(base, dict):
+        return None
+    if hasattr(graph, "compile"):
+        graph = graph.compile()
+    variants = namespace.get("variantes")
+    if not isinstance(variants, dict) or not all(isinstance(v, dict) for v in variants.values()):
+        variants = {"actuel": {}}
+    results = []
+    for name, overrides in list(variants.items())[:MAX_VARIANTS]:
+        saved = {k: namespace.get(k, _MISSING) for k in overrides}
+        namespace.update(overrides)
+        try:
+            rows = _run_cases(graph, namespace, cases, base)
+        finally:
+            for k, v in saved.items():
+                if v is _MISSING:
+                    namespace.pop(k, None)
+                else:
+                    namespace[k] = v
+        costs = [r["cost"] for r in rows]
+        results.append({
+            "name": str(name), "rows": rows, "passed": sum(r["ok"] for r in rows), "total": len(rows),
+            "tokens": sum(r["tokens"] for r in rows), "calls": sum(r["calls"] for r in rows),
+            "cost": None if any(c is None for c in costs) else round(sum(costs), 6),
+            "duration": round(sum(r["duration"] for r in rows), 1),
+            "changes": sorted(str(k) for k in overrides),
+        })
+    first = results[0]
+    return {"variants": results, "rows": first["rows"], "passed": first["passed"], "total": first["total"],
+            "skipped": max(0, len(cases) - MAX_CASES), "skipped_variants": max(0, len(variants) - MAX_VARIANTS)}

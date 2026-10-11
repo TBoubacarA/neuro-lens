@@ -402,6 +402,7 @@ def test_agentops_trace_and_evaluation_offline(monkeypatch):
     assert ev["total"] == 3 and ev["passed"] == 1
     assert [r["ok"] for r in ev["rows"]] == [True, False, False] and ev["rows"][1]["got"] == "La tour Eiffel mesure 33 000 cm."
     assert ev["rows"][0]["steps"] == 6 and ev["rows"][0]["calls"] == 0
+    assert [v["passed"] for v in ev["variants"]] == [1, 1]  # hors ligne, la règle ignore le prompt : même note
     assert analyze(AGENT)["ops"]["eval"] is None  # pas de `cas` : pas d'évaluation
 
 
@@ -459,7 +460,12 @@ def test_agentops_trace_counts_tokens_and_cost_live(monkeypatch):
     ev = ops["eval"]
     assert ev["total"] == 3 and all(r["calls"] == 3 and r["tokens"] == 450 for r in ev["rows"])
     assert [r["ok"] for r in ev["rows"]] == [True, False, False]  # le faux Claude répond toujours la même chose
-    assert len(calls) == 12  # 3 pour le déroulé, 3 par cas
+    assert len(calls) == 21  # 3 pour le déroulé, puis 3 par cas et par variante
+    names = [v["name"] for v in ev["variants"]]
+    assert names == ["outils d'abord", "de mémoire"] and [v["changes"] for v in ev["variants"]] == [["SYSTEM"], ["SYSTEM"]]
+    assert all(v["calls"] == 9 and v["tokens"] == 1350 and v["cost"] == ev["variants"][0]["cost"] for v in ev["variants"])
+    systems = [kw["system"] for kw in calls[3:]]
+    assert systems[0].startswith("Réponds en français, en une phrase. Utilise") and systems[-1].endswith("sans utiliser d'outil.")
 
     # Garde-fou : avec LIMITES = {"appels": 1}, l'agent s'arrête au deuxième appel.
     code = _example("Agent IA avec Claude (LangGraph)").replace('LIMITES = {"appels": 8}', 'LIMITES = {"appels": 1}')

@@ -281,6 +281,7 @@ OUTILS = [
      "input_schema": {"type": "object", "properties": {"operation": {"type": "string"}}, "required": ["operation"]}},
 ]
 ENCYCLOPEDIE = {"tour eiffel": "La tour Eiffel mesure 330 m.", "everest": "L'Everest culmine à 8 849 m."}
+SYSTEM = "Réponds en français, en une phrase. Utilise les outils plutôt que ta mémoire."
 
 
 class Etat(TypedDict):
@@ -305,7 +306,7 @@ def reflechir(etat):
     reponse = anthropic.Anthropic().beta.messages.create(
         model="claude-opus-5-5", max_tokens=4000, output_config={"effort": "low"},
         betas=["server-side-fallback-2026-07-01"], fallbacks="default",   # un autre modèle prend le relais en cas de refus
-        system="Réponds en français, en une phrase. Utilise les outils plutôt que ta mémoire.",
+        system=SYSTEM,
         tools=OUTILS, messages=etat["messages"] or [{"role": "user", "content": etat["question"]}],
     )
     messages = (etat["messages"] or [{"role": "user", "content": etat["question"]}]) + [
@@ -371,5 +372,11 @@ cas = [
     {"question": "Quelle est la hauteur de l'Everest en mètres ?", "attendu": "8 849"},
     {"question": "Combien font 12 * 12 ?", "attendu": "144"},
 ]
+# Deux versions du prompt, notées sur les mêmes cas : laquelle garder ? (Chaque variante remplace
+# les variables nommées, le temps de son évaluation ; on peut aussi y changer OUTILS ou le modèle.)
+variantes = {
+    "outils d'abord": {"SYSTEM": SYSTEM},
+    "de mémoire": {"SYSTEM": "Réponds en français, en une phrase, de mémoire, sans utiliser d'outil."},
+}
 `,
 };

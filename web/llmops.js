@@ -46,31 +46,86 @@ function renderLLMOps(root, res, onHover, onPick) {
     root.appendChild(hint);
     return;
   }
-  const grade = mlCard("dense", "Évaluation", `${ev.passed} sur ${ev.total} réussi${ev.passed > 1 ? "s" : ""}`);
-  grade.querySelector(".shape").classList.add(ev.passed === ev.total ? "llm-good" : "llm-bad");
-  addText(grade, "explain", "Pour chaque cas, l'agent repart de zéro avec la question du cas ; il réussit si la réponse attendue se trouve dans sa réponse. Change le prompt (`system`), le modèle ou les outils, et regarde la note bouger : c'est la boucle d'une équipe LLMOps.");
-  const totalCost = ev.rows.reduce((s, r) => s + (r.cost ?? 0), 0);
-  const bar = document.createElement("div");
-  bar.className = "llm-score";
-  bar.innerHTML = `<div class="llm-score-fill"></div>`;
-  bar.querySelector("div").style.width = `${ev.total ? (100 * ev.passed) / ev.total : 0}%`;
-  bar.querySelector("div").classList.add(ev.passed === ev.total ? "good" : ev.passed ? "mid" : "bad");
-  grade.appendChild(bar);
-  const table = document.createElement("table");
-  table.className = "llm-table";
-  table.innerHTML = `<thead><tr><th></th><th>cas</th><th>attendu</th><th>obtenu</th><th>passages</th><th>appels</th><th>tokens</th><th>coût</th><th>durée</th></tr></thead><tbody></tbody>`;
-  const body = table.querySelector("tbody");
-  ev.rows.forEach((r) => {
-    const tr = document.createElement("tr");
-    tr.className = r.ok ? "ok" : "ko";
-    [r.ok ? "✓" : "✗", r.input, r.expected, r.stopped ? `${r.got || ""} (${r.stopped})` : r.got, r.steps, r.calls, fmtTok(r.tokens), fmtCost(r.cost), fmtMs(r.duration)]
-      .forEach((v, i) => { const td = document.createElement("td"); td.textContent = v; if (i >= 4) td.className = "num"; tr.appendChild(td); });
-    body.appendChild(tr);
-  });
-  grade.appendChild(table);
-  const note = [`Coût total de l'évaluation : ${fmtCost(ev.rows.some((r) => r.cost == null) ? null : totalCost)}.`];
+  const variants = ev.variants || [{ name: "actuel", rows: ev.rows, passed: ev.passed, total: ev.total, changes: [] }];
+  const best = variants.reduce((b, v) => (v.passed > b.passed ? v : b), variants[0]);
+  const several = variants.length > 1;
+  const grade = mlCard("dense", "Évaluation", several
+    ? `${variants.length} variantes · la meilleure : ${best.passed} sur ${best.total}`
+    : `${ev.passed} sur ${ev.total} réussi${ev.passed > 1 ? "s" : ""}`);
+  grade.querySelector(".shape").classList.add(best.passed === best.total ? "llm-good" : "llm-bad");
+  addText(grade, "explain", (several
+    ? "Chaque variante remplace les variables nommées dans `variantes` (le prompt, les outils, le modèle…) et passe les mêmes cas : on garde celle qui réussit le plus pour le moins de tokens. "
+    : "Pour chaque cas, l'agent repart de zéro avec la question du cas ; il réussit si la réponse attendue se trouve dans sa réponse. Change le prompt (`system`), le modèle ou les outils, et regarde la note bouger : c'est la boucle d'une équipe LLMOps. ")
+    + (several && !ops.calls ? "Hors ligne, la règle fixe ignore le prompt : les variantes font jeu égal. Lance avec Claude pour les départager." : ""));
+
+  if (several) {
+    const cmp = document.createElement("table");
+    cmp.className = "llm-table llm-compare";
+    cmp.innerHTML = `<thead><tr><th>variante</th><th>réussite</th><th></th><th>appels</th><th>tokens</th><th>coût</th><th>durée</th><th>change</th></tr></thead><tbody></tbody>`;
+    variants.forEach((v) => {
+      const tr = document.createElement("tr");
+      tr.className = v === best ? "best" : "";
+      const bar = `<div class="llm-score"><div class="llm-score-fill ${v.passed === v.total ? "good" : v.passed ? "mid" : "bad"}" style="width:${v.total ? (100 * v.passed) / v.total : 0}%"></div></div>`;
+      tr.innerHTML = `<td></td><td class="num"></td><td class="bar">${bar}</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td></td>`;
+      const tds = tr.querySelectorAll("td");
+      tds[0].textContent = (v === best ? "★ " : "") + v.name;
+      tds[1].textContent = `${v.passed} / ${v.total}`;
+      tds[3].textContent = v.calls;
+      tds[4].textContent = fmtTok(v.tokens);
+      tds[5].textContent = fmtCost(v.cost);
+      tds[6].textContent = fmtMs(v.duration);
+      tds[7].textContent = v.changes.join(", ");
+      cmp.querySelector("tbody").appendChild(tr);
+    });
+    grade.appendChild(cmp);
+  }
+
+  // Le détail des cas, une variante à la fois.
+  const tabs = document.createElement("div");
+  tabs.className = "llm-tabs";
+  const detail = document.createElement("div");
+  const showVariant = (v) => {
+    tabs.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.name === v.name));
+    detail.innerHTML = "";
+    const bar = document.createElement("div");
+    bar.className = "llm-score";
+    bar.innerHTML = `<div class="llm-score-fill"></div>`;
+    bar.querySelector("div").style.width = `${v.total ? (100 * v.passed) / v.total : 0}%`;
+    bar.querySelector("div").classList.add(v.passed === v.total ? "good" : v.passed ? "mid" : "bad");
+    detail.appendChild(bar);
+    const table = document.createElement("table");
+    table.className = "llm-table";
+    table.innerHTML = `<thead><tr><th></th><th>cas</th><th>attendu</th><th>obtenu</th><th>passages</th><th>appels</th><th>tokens</th><th>coût</th><th>durée</th></tr></thead><tbody></tbody>`;
+    const body = table.querySelector("tbody");
+    v.rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      tr.className = r.ok ? "ok" : "ko";
+      [r.ok ? "✓" : "✗", r.input, r.expected, r.stopped ? `${r.got || ""} (${r.stopped})` : r.got, r.steps, r.calls, fmtTok(r.tokens), fmtCost(r.cost), fmtMs(r.duration)]
+        .forEach((val, i) => { const td = document.createElement("td"); td.textContent = val; if (i >= 4) td.className = "num"; tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+    detail.appendChild(table);
+  };
+  if (several) {
+    variants.forEach((v) => {
+      const b = document.createElement("button");
+      b.className = "small";
+      b.dataset.name = v.name;
+      b.textContent = `${v.name} · ${v.passed}/${v.total}`;
+      b.addEventListener("click", () => showVariant(v));
+      tabs.appendChild(b);
+    });
+    grade.appendChild(tabs);
+  }
+  grade.appendChild(detail);
+  showVariant(best);
+
+  const totalCost = variants.flatMap((v) => v.rows).reduce((s, r) => s + (r.cost ?? 0), 0);
+  const unpriced = variants.some((v) => v.rows.some((r) => r.cost == null));
+  const note = [`Coût total de l'évaluation : ${fmtCost(unpriced ? null : totalCost)}.`];
   if (ev.skipped) note.push(`${ev.skipped} cas de plus non joués (8 au maximum).`);
-  if (!ops.calls) note.push("La règle fixe répond toujours la même chose : c'est pour ça qu'elle rate les autres questions.");
+  if (ev.skipped_variants) note.push(`${ev.skipped_variants} variante${ev.skipped_variants > 1 ? "s" : ""} de plus non jouée${ev.skipped_variants > 1 ? "s" : ""} (4 au maximum).`);
+  if (!ops.calls && !several) note.push("La règle fixe répond toujours la même chose : c'est pour ça qu'elle rate les autres questions.");
   addText(grade, "meta", note.join(" "));
   root.appendChild(grade);
 }
