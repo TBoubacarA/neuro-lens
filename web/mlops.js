@@ -42,8 +42,8 @@ function renderMLOps(root, res, ctx) {
     ["Essais", `${ops.runs.length} noté${ops.runs.length > 1 ? "s" : ""}`, "ok", "ops-runs"],
     ["Version", ops.versions.length ? `${ops.versions.length} au registre` : "aucune", ops.versions.length ? "ok" : "todo", "ops-deploy"],
     ["Production", prod ? `v${prod.version} en service` : "rien en service", prod ? "ok" : "todo", "ops-api"],
-    ["Surveillance", !mon ? "pas de trafic" : mon.status === "alert" ? "dérive !" : mon.status === "watch" ? "à surveiller" : "tout va bien",
-      !mon ? "todo" : mon.status === "ok" ? "ok" : mon.status, "ops-watch"],
+    ["Surveillance", !mon ? "pas de trafic" : mon.status === "few" ? "trop peu de trafic" : mon.status === "alert" ? "dérive !" : mon.status === "watch" ? "à surveiller" : "tout va bien",
+      !mon || mon.status === "few" ? "todo" : mon.status === "ok" ? "ok" : mon.status, "ops-watch"],
   ];
   stages.forEach(([name, sub, status, target], i) => {
     if (i) chain.appendChild(Object.assign(document.createElement("i"), { textContent: "→" }));
@@ -183,7 +183,7 @@ function renderMLOps(root, res, ctx) {
   box.appendChild(api);
 
   // ----- 6. Surveillance -----
-  const watch = mlCard(mon && mon.status !== "ok" ? "act" : "pool", "Surveillance en production",
+  const watch = mlCard(mon && ["watch", "alert"].includes(mon.status) ? "act" : "pool", "Surveillance en production",
     mon ? `${mon.requests} requête${mon.requests > 1 ? "s" : ""}` : "pas encore de trafic");
   watch.id = "ops-watch";
   addText(watch, "explain", "Un modèle en production ne plante pas quand il devient mauvais : il continue de répondre, mais faux. La cause la plus fréquente est la dérive : les données reçues ne ressemblent plus à celles de l'entraînement. Simule du trafic, puis augmente la dérive et recommence.");
@@ -211,6 +211,7 @@ function renderMLOps(root, res, ctx) {
   watch.appendChild(sim);
   if (mon) {
     const banner = addText(watch, `ops-banner ${mon.status}`, {
+      few: `Seulement ${mon.requests} requête${mon.requests > 1 ? "s" : ""} reçue${mon.requests > 1 ? "s" : ""} : trop peu pour dire si les données ont changé. Simule du trafic pour avoir une mesure.`,
       ok: "Tout va bien : les données reçues ressemblent à celles de l'entraînement.",
       watch: "À surveiller : les données reçues commencent à s'écarter de celles de l'entraînement.",
       alert: "Alerte dérive : les données reçues ne ressemblent plus à celles de l'entraînement. Les réponses du modèle ne sont plus fiables ; il faut le réentraîner sur des données récentes.",
@@ -229,7 +230,7 @@ function renderMLOps(root, res, ctx) {
     kpi("Requêtes reçues", mon.requests);
     kpi("Latence", `${mon.latency_p50} ms`, `95 % sous ${mon.latency_p95} ms`);
     if (mon.quality !== undefined) kpi("Bonnes réponses", pct(mon.quality), `${pct(mon.quality_at_deploy)} au déploiement`);
-    kpi("Dérive (PSI)", mon.drift.toFixed(2), "alerte à 0,25");
+    kpi("Dérive (PSI)", mon.status === "few" ? "—" : mon.drift.toFixed(2), mon.status === "few" ? "pas encore mesurable" : "alerte à 0,25");
     watch.appendChild(kpis);
     if (mon.quality_curve?.length > 1) watch.appendChild(qualityCurve(mon));
     const grid = document.createElement("div");
