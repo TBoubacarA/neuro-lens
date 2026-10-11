@@ -625,3 +625,24 @@ def test_workspace_around_the_code_is_real_and_its_tests_pass(tmp_path, monkeypa
     assert workspace.run_tests()["passed"]
     assert analyze(AGENT)["workspace"]["main"] == "src/agent.py"
     assert workspace.run_tests()["passed"]
+
+
+def test_output_guardrails_check_each_answer(monkeypatch):
+    from server.llmops import check
+
+    rules = {"max_mots": 5, "interdit": ["je ne sais pas"], "doit_contenir": ["cm"], "format": "nombre", "donnees_personnelles": True}
+    assert check("33 000 cm.", rules) == []
+    hit = {v["regle"] for v in check("Je ne sais pas, écris à paul@exemple.fr ou au 06 12 34 56 78 pour le savoir", rules)}
+    assert hit == {"max_mots", "interdit", "doit_contenir", "donnees_personnelles"}  # le téléphone contient des chiffres
+    assert [v["regle"] for v in check("aucun chiffre ici, en cm", {"format": "nombre", "doit_contenir": ["cm"]})] == ["format"]
+    assert [v["regle"] for v in check("{pas du json}", {"format": "json"})] == ["format"] and check('{"a": 1}', {"format": "json"}) == []
+    assert check("Bonjour", {"format": "phrase"}) and not check("Bonjour.", {"format": "phrase"}) and check("x", "pas un dict") == []
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    res = analyze(_example("Agent IA avec Claude (LangGraph)"))
+    assert res["ops"]["rules"] == ["donnees_personnelles", "format", "interdit", "max_mots"] and res["ops"]["violations"] == []
+    rows = res["ops"]["eval"]["variants"][0]["rows"]
+    assert all(r["violations"] == [] for r in rows) and res["ops"]["eval"]["variants"][0]["clean"] == 3
+    strict = analyze(_example("Agent IA avec Claude (LangGraph)").replace('"max_mots": 25', '"max_mots": 3'))
+    assert [v["regle"] for v in strict["ops"]["violations"]] == ["max_mots"]
+    assert strict["ops"]["eval"]["variants"][0]["clean"] == 0 and all(r["violations"] for r in strict["ops"]["eval"]["rows"])

@@ -273,6 +273,8 @@ def _other_kinds(code: str, namespace: dict, override: dict | None = None) -> di
             with llmops.trace(namespace) as tr:
                 result = agents.describe(graph, namespace, code)
             result["ops"] = llmops.summary(tr, namespace)
+            if result.get("final"):
+                result["ops"]["violations"] = llmops.check(llmops._answer(result["final"]), namespace.get("regles"))
             result["ops"]["eval"] = llmops.evaluate(graph, namespace)
             name = "graph"
         else:

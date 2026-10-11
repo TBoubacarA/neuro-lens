@@ -77,6 +77,7 @@ Sous le déroulé, ce qu'une équipe qui met des agents en production regarde to
 - **Coût** : si le code donne `PRIX = {"claude-opus-5-5": {"entree": 5.0, "sortie": 25.0}}` (dollars par million de tokens), chaque appel et chaque exécution sont chiffrés.
 - **Garde-fou** : `LIMITES = {"appels": 8, "tokens": 20000}` arrête l'agent avant qu'il ne dépasse le budget (12 appels par défaut).
 - **Évaluation** : `cas = [{"question": "…", "attendu": "…"}, …]` fait tourner l'agent sur chaque cas et le note ; la réponse attendue doit se trouver dans sa réponse. On change le prompt ou le modèle, et on regarde la note bouger.
+- **Garde-fous de sortie** : `regles = {"max_mots": 25, "interdit": ["je ne sais pas"], "doit_contenir": ["cm"], "format": "nombre" | "json" | "phrase", "donnees_personnelles": True}` vérifie chaque réponse (celle du déroulé et celles de l'évaluation) : la règle enfreinte et le détail s'affichent, comme ce qu'on bloque ou reformule avant de répondre à un utilisateur en production.
 - **Variantes** : `variantes = {"court": {"SYSTEM": "…"}, "détaillé": {"SYSTEM": "…"}}` évalue chaque version sur les mêmes cas (chaque variante remplace les variables nommées : prompt, outils, modèle…) et les compare : réussite, tokens, coût. On garde la meilleure.
 
 L'exemple « Agent IA avec Claude » est piloté par un vrai modèle : Claude choisit lui-même ses outils (recherche, calculatrice) et on voit chaque appel dans le déroulé. Lance le serveur avec ta clé, puis clique sur « Lancer avec Claude » :

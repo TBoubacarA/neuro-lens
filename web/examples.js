@@ -391,6 +391,8 @@ cas = [
     {"question": "Quelle est la hauteur de l'Everest en mètres ?", "attendu": "8 849"},
     {"question": "Combien font 12 * 12 ?", "attendu": "144"},
 ]
+# Garde-fous de sortie : chaque réponse est vérifiée contre ces règles (en plus d'être notée).
+regles = {"max_mots": 25, "interdit": ["je ne sais pas"], "format": "nombre", "donnees_personnelles": True}
 # Deux versions du prompt, notées sur les mêmes cas : laquelle garder ? (Chaque variante remplace
 # les variables nommées, le temps de son évaluation ; on peut aussi y changer OUTILS ou le modèle.)
 variantes = {

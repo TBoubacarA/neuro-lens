@@ -38,6 +38,29 @@ function renderLLMOps(root, res, onHover, onPick) {
   }
   root.appendChild(card);
 
+  // 1 bis. Les garde-fous de sortie : la réponse finale, règle par règle.
+  if (ops.rules && ops.rules.length) {
+    const v = ops.violations || [];
+    const guard = mlCard(v.length ? "act" : "pool", "Garde-fous de sortie", v.length ? `${v.length} règle${v.length > 1 ? "s" : ""} enfreinte${v.length > 1 ? "s" : ""}` : "réponse conforme");
+    addText(guard, "explain", "Avant de montrer une réponse à un utilisateur, on la vérifie : longueur, mots interdits, format, données personnelles. Une réponse qui enfreint une règle est bloquée ou reformulée en production. Ici, la réponse finale du déroulé, règle par règle.");
+    const list = document.createElement("div");
+    list.className = "llm-rules";
+    ops.rules.forEach((r) => {
+      const hits = v.filter((x) => x.regle === r);
+      const row = document.createElement("div");
+      row.className = hits.length ? "ko" : "ok";
+      row.innerHTML = `<b></b><code></code><span></span>`;
+      row.querySelector("b").textContent = hits.length ? "✗" : "✓";
+      row.querySelector("code").textContent = r;
+      row.querySelector("span").textContent = hits.length ? hits.map((x) => x.detail).join(" · ") : "respectée";
+      list.appendChild(row);
+    });
+    guard.appendChild(list);
+    root.appendChild(guard);
+  } else {
+    addText(card, "meta", "Ajoute `regles` au code (max_mots, interdit, doit_contenir, format, donnees_personnelles) pour vérifier chaque réponse : ce sont les garde-fous de sortie.");
+  }
+
   // 2. L'évaluation : l'agent est noté sur un jeu de cas.
   const ev = ops.eval;
   if (ev === null || ev === undefined) {
@@ -61,20 +84,21 @@ function renderLLMOps(root, res, onHover, onPick) {
   if (several) {
     const cmp = document.createElement("table");
     cmp.className = "llm-table llm-compare";
-    cmp.innerHTML = `<thead><tr><th>variante</th><th>réussite</th><th></th><th>appels</th><th>tokens</th><th>coût</th><th>durée</th><th>change</th></tr></thead><tbody></tbody>`;
+    cmp.innerHTML = `<thead><tr><th>variante</th><th>réussite</th><th></th><th>sans faute</th><th>appels</th><th>tokens</th><th>coût</th><th>durée</th><th>change</th></tr></thead><tbody></tbody>`;
     variants.forEach((v) => {
       const tr = document.createElement("tr");
       tr.className = v === best ? "best" : "";
       const bar = `<div class="llm-score"><div class="llm-score-fill ${v.passed === v.total ? "good" : v.passed ? "mid" : "bad"}" style="width:${v.total ? (100 * v.passed) / v.total : 0}%"></div></div>`;
-      tr.innerHTML = `<td></td><td class="num"></td><td class="bar">${bar}</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td></td>`;
+      tr.innerHTML = `<td></td><td class="num"></td><td class="bar">${bar}</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td></td>`;
       const tds = tr.querySelectorAll("td");
       tds[0].textContent = (v === best ? "★ " : "") + v.name;
       tds[1].textContent = `${v.passed} / ${v.total}`;
-      tds[3].textContent = v.calls;
-      tds[4].textContent = fmtTok(v.tokens);
-      tds[5].textContent = fmtCost(v.cost);
-      tds[6].textContent = fmtMs(v.duration);
-      tds[7].textContent = v.changes.join(", ");
+      tds[3].textContent = v.clean == null ? "—" : `${v.clean} / ${v.total}`;
+      tds[4].textContent = v.calls;
+      tds[5].textContent = fmtTok(v.tokens);
+      tds[6].textContent = fmtCost(v.cost);
+      tds[7].textContent = fmtMs(v.duration);
+      tds[8].textContent = v.changes.join(", ");
       cmp.querySelector("tbody").appendChild(tr);
     });
     grade.appendChild(cmp);
@@ -95,13 +119,22 @@ function renderLLMOps(root, res, onHover, onPick) {
     detail.appendChild(bar);
     const table = document.createElement("table");
     table.className = "llm-table";
-    table.innerHTML = `<thead><tr><th></th><th>cas</th><th>attendu</th><th>obtenu</th><th>passages</th><th>appels</th><th>tokens</th><th>coût</th><th>durée</th></tr></thead><tbody></tbody>`;
+    const guarded = !!(ops.rules && ops.rules.length);
+    table.innerHTML = `<thead><tr><th></th><th>cas</th><th>attendu</th><th>obtenu</th>${guarded ? "<th>garde-fous</th>" : ""}<th>passages</th><th>appels</th><th>tokens</th><th>coût</th><th>durée</th></tr></thead><tbody></tbody>`;
     const body = table.querySelector("tbody");
     v.rows.forEach((r) => {
       const tr = document.createElement("tr");
       tr.className = r.ok ? "ok" : "ko";
-      [r.ok ? "✓" : "✗", r.input, r.expected, r.stopped ? `${r.got || ""} (${r.stopped})` : r.got, r.steps, r.calls, fmtTok(r.tokens), fmtCost(r.cost), fmtMs(r.duration)]
-        .forEach((val, i) => { const td = document.createElement("td"); td.textContent = val; if (i >= 4) td.className = "num"; tr.appendChild(td); });
+      const cells = [r.ok ? "✓" : "✗", r.input, r.expected, r.stopped ? `${r.got || ""} (${r.stopped})` : r.got];
+      if (guarded) cells.push((r.violations || []).length ? r.violations.map((x) => x.regle).join(", ") : "✓");
+      cells.push(r.steps, r.calls, fmtTok(r.tokens), fmtCost(r.cost), fmtMs(r.duration));
+      cells.forEach((val, i) => {
+        const td = document.createElement("td");
+        td.textContent = val;
+        if (i >= (guarded ? 5 : 4)) td.className = "num";
+        if (guarded && i === 4) td.className = (r.violations || []).length ? "llm-ko" : "llm-ok";
+        tr.appendChild(td);
+      });
       body.appendChild(tr);
     });
     detail.appendChild(table);
