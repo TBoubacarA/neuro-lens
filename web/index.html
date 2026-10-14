@@ -128,6 +128,14 @@
         </div>
         <div id="train-eval"></div>
       </div>
+      <div class="card graph-card" id="volumes-card" hidden>
+        <div class="card-head">
+          <span class="tag tag-input">Volumes 3D</span>
+          <span class="shape" id="volumes-shape"></span>
+        </div>
+        <p class="hint">Ce qui sort de chaque couche, en volume : la largeur et la hauteur sont celles de l'image, la profondeur le nombre de canaux. Les faces montrent les vraies valeurs calculées sur ton dessin (clair = actif). Conv élargit la profondeur, maxpool réduit la face, flatten déplie tout en une colonne. Les fonctions appelées dans <code>forward</code> (F.relu, F.max_pool2d…) y sont aussi. Fais glisser pour tourner ; survole un volume pour retrouver sa ligne de code.</p>
+        <canvas id="volumes" class="depth"></canvas>
+      </div>
       <div class="card graph-card" id="graph-card" hidden>
         <div class="card-head">
           <span class="tag tag-input">Vue réseau</span>
@@ -206,6 +214,7 @@
   <script src="/static/agents.js"></script>
   <script src="/static/llmops.js"></script>
   <script src="/static/depth.js"></script>
+  <script src="/static/volumes.js"></script>
   <script src="/static/train.js"></script>
   <script src="/static/dream.js"></script>
   <script src="/static/explore.js"></script>

@@ -222,7 +222,7 @@ function renderOther(res) {
   lastLayers = [];
   lastShape = "";
   tokens = null;
-  ["input-card", "graph-card", "blocks-card", "depth-card", "train-card", "dream-card", "attack-card", "landscape-card"].forEach((id) => { $(id).hidden = true; });
+  ["input-card", "volumes-card", "graph-card", "blocks-card", "depth-card", "train-card", "dream-card", "attack-card", "landscape-card"].forEach((id) => { $(id).hidden = true; });
   $("prediction").innerHTML = "";
   $("to-ops").hidden = res.kind !== "ml";
   if (res.kind === "ml") {
@@ -263,6 +263,7 @@ function render(res) {
     lastResult = res;
     renderLayers(res.layers, null, build);
     renderNetwork(res, build);
+    renderVolumes(res, highlightLine, revealLine, build);
     renderPrediction(res.prediction, res.training);
     renderTraining(res);
     renderExplore(res);
