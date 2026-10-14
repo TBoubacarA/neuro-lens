@@ -162,12 +162,54 @@ def _sources(tensors, producers: dict, x: torch.Tensor) -> list[int]:
     return sorted(found)
 
 
+# Les fonctions qu'un forward appelle à la main, et le nom de couche sous lequel on les montre.
+FUNCTIONS = {
+    "F.relu": "ReLU", "F.leaky_relu": "LeakyReLU", "F.gelu": "GELU", "F.sigmoid": "Sigmoid", "F.tanh": "Tanh",
+    "F.softmax": "Softmax", "F.log_softmax": "LogSoftmax", "F.dropout": "Dropout",
+    "F.max_pool2d": "MaxPool2d", "F.avg_pool2d": "AvgPool2d", "F.adaptive_avg_pool2d": "AdaptiveAvgPool2d",
+    "torch.flatten": "Flatten", "torch.relu": "ReLU", "torch.sigmoid": "Sigmoid", "torch.tanh": "Tanh",
+}
+_FN_PARAMS = {"F.max_pool2d": "kernel_size", "F.avg_pool2d": "kernel_size", "F.dropout": "p",
+              "F.adaptive_avg_pool2d": "output_size", "F.leaky_relu": "negative_slope", "F.softmax": "dim"}
+
+
+def _patch_functions(record) -> list[tuple]:
+    """Remplace le temps d'un forward les fonctions de FUNCTIONS par une version qui note leur sortie,
+    seulement quand l'appel vient du code de l'éditeur (nn.ReLU appelle F.relu, lui, depuis PyTorch)."""
+    import sys
+
+    patched = []
+    for label in FUNCTIONS:
+        owner_name, attr = label.split(".")
+        owner = nn.functional if owner_name == "F" else torch
+        original = getattr(owner, attr, None)
+        if original is None:
+            continue
+
+        def wrapper(*args, _label=label, _original=original, **kwargs):
+            out = _original(*args, **kwargs)
+            frame = sys._getframe(1)
+            if frame.f_code.co_filename != FILENAME or not isinstance(out, torch.Tensor) or not args:
+                return out
+            inp = args[0] if isinstance(args[0], torch.Tensor) else None
+            key = _FN_PARAMS.get(_label)
+            value = kwargs.get(key, args[1] if len(args) > 1 else None) if key else None
+            params = {key: (list(value) if isinstance(value, tuple) else value)} if key and isinstance(value, (int, float, tuple)) else {}
+            return record(_label, out, inp, params, frame.f_lineno)
+
+        setattr(owner, attr, wrapper)
+        patched.append((owner, attr, original))
+    return patched
+
+
 def _find_lines(code: str, layers: list[dict]) -> None:
     """Associe chaque couche à la ligne du code qui la crée (meilleur effort)."""
     lines = code.splitlines()
     used: set[int] = set()
     pending = []
     for layer in layers:  # d'abord les couches nommées : self.conv1 = nn.Conv2d(...)
+        if layer.get("fn"):
+            continue  # une fonction appelée dans forward : sa ligne est celle de l'appel, déjà connue
         attr = layer["name"].split(".")[-1]
         found = None
         if not attr.isdigit():
@@ -230,7 +272,7 @@ def _group_lines(code: str, model: nn.Module, layers: list[dict]) -> None:
     groups: dict[str, dict] = {}
     for layer in layers:
         parent = layer["name"].rpartition(".")[0]
-        if not parent:
+        if not parent or layer.get("fn"):
             continue
         layer["group"] = {"name": parent, "type": type(modules[parent]).__name__}
         if "line" not in layer:
@@ -467,6 +509,31 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
             return raw if dead else None
         return hook
 
+    def record_fn(label: str, out: torch.Tensor, inp: torch.Tensor, params: dict, line: int | None):
+        """Une fonction appelée dans forward (F.relu, torch.flatten...) : on la montre comme une couche."""
+        axis = 1 if out.dim() == 4 or out.dim() == 2 else out.dim() - 1
+        dead = [u for u in silenced.get(len(layers), []) if 0 <= u < out.shape[axis]]
+        if dead:
+            out = out.clone()
+            out.index_fill_(axis, torch.tensor(dead), 0.0)
+        preview = _preview(out)
+        sources = _sources((inp,), producers, x)
+        if out.grad_fn is not None:
+            producers[out.grad_fn] = len(layers)
+        layers.append({
+            "name": f"{label}@{line}" if line else label,
+            "type": FUNCTIONS[label],
+            "fn": label,
+            "params": params,
+            "n_params": 0,
+            "shape": list(out.shape),
+            "preview": preview,
+            "inputs": sources,
+            "off": dead,
+            **({"line": line} if line else {}),
+        })
+        return out
+
     def want_weights(_module, args, kwargs):
         return args, {**kwargs, "need_weights": True, "average_attn_weights": False}
 
@@ -476,6 +543,7 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
         hooks.append(module.register_forward_hook(make_hook(name)))
 
     model.eval()
+    patched = _patch_functions(record_fn)
     try:
         out = model(x)  # sans torch.no_grad() : _sources a besoin du graphe des calculs
     except Exception as exc:  # noqa: BLE001
@@ -492,6 +560,8 @@ def analyze(code: str, pixels: list[list[float]] | None = None, text: str | None
     finally:
         for h in hooks:
             h.remove()
+        for owner, attr, original in patched:
+            setattr(owner, attr, original)
 
     _find_lines(code, layers)
     _group_lines(code, model, layers)

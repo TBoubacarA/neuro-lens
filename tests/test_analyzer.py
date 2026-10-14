@@ -48,7 +48,9 @@ def test_layers_shapes_and_lines():
 def test_class_model_lines_follow_attributes():
     res = analyze(CLASS_MODEL)
     assert res["ok"]
-    assert [(l["name"], l["line"]) for l in res["layers"]] == [("conv1", 7), ("fc", 8)]
+    # F.relu, appelé dans forward, apparaît comme une couche à part entière, à la ligne de l'appel.
+    assert [(l["name"], l["line"]) for l in res["layers"]] == [("conv1", 7), ("F.relu@11", 11), ("fc", 8)]
+    assert res["layers"][1]["type"] == "ReLU" and res["layers"][1]["fn"] == "F.relu" and res["layers"][1]["inputs"] == [0]
 
 
 def test_shape_mismatch_points_at_failing_layer():
