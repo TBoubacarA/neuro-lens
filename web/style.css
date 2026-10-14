@@ -579,3 +579,15 @@ html, body { overflow: clip; } /* aucun défilement de la page, même déclench�
 .panne-result { margin-top: 10px; padding: 8px 10px; border-radius: 6px; background: var(--bg); font-size: 12.5px; line-height: 1.5; }
 .panne-result.bad { color: #ffb4b4; }
 .panne-result.good b { color: var(--ok); }
+
+/* Carte de la chaîne en plaques */
+.chain-canvas { display: block; width: 100%; }
+.chain-chips { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.chain-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 3px 4px; border-radius: 6px; }
+.chain-row.on { background: #ffffff0a; }
+.chain-row b { width: 120px; font-size: 12px; flex: none; }
+.chain-chip { padding: 2px 8px; font-size: 11.5px; border-radius: 10px; }
+.chain-chip.built { border-color: var(--ok); color: var(--text); }
+.chain-chip.ready { border-color: var(--act); color: var(--muted); }
+.chain-chip.missing { border-style: dashed; color: var(--muted); }
+.chain-chip.picked { background: #7aa2ff33; border-color: #fff; }

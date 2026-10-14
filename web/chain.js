@@ -1,16 +1,14 @@
 // neuro-lens : la carte 3D de la chaîne, de la donnée à la production.
 //
-// Quatre plateformes — Données, Modèle, Infrastructure, Production — et sur chacune les briques du
-// projet. La 3D porte une information : une brique qui existe vraiment se dresse en volume, une brique
-// prête mais pas branchée reste basse, une brique absente est à plat. Un clic l'explique simplement :
+// Quatre plaques — Données, Modèle, Infrastructure, Production — alignées comme les couches d'un
+// réseau, et sur chacune ce que l'étage contient vraiment dans le projet. Sous la carte, les briques
+// de chaque étage avec leur état (en place, prête, absente) ; un clic en explique une simplement :
 // à quoi elle sert, ce qu'elle vaut dans ce projet, ce qui se passe sans elle, où la trouver.
 
-const CHAIN = { scale: 44, pitch: 0.62, yawMin: -1.15, yawMax: -0.2, blockW: 2.3, blockD: 0.78, rowGap: 1.5, stageW: 3.1, stageGap: 0.75 };
-const HEIGHT = { built: 0.95, ready: 0.34, missing: 0.03 };
 const STATE_TEXT = { built: "en place", ready: "prête, pas encore branchée", missing: "pas encore là" };
 const STAGE_COLOR = ["#ff9a85", "#b083f0", "#5b8cff", "#4cd98a"];
 
-let chainYaw = -0.62;
+let chainYaw = 0.78;
 let chainPicked = null;   // identifiant de la brique expliquée
 let chainModel = null;
 let chainOpen = (() => { try { return localStorage.getItem("neuro-lens-chaine") !== "0"; } catch (e) { return true; } })();
@@ -191,90 +189,254 @@ function chainFor(res) {
   return model;
 }
 
-// ---------- Le dessin 3D ----------
+// ---------- Le dessin 3D : une plaque par étage, avec le vrai contenu du projet ----------
+//
+// Chaque étage est une plaque dressée, et sur la plaque on dessine ce qu'il contient vraiment :
+// les points des données, la frontière apprise, les versions et le conteneur, le trafic reçu.
+// Les plaques s'alignent dans l'ordre de la chaîne, comme les couches d'un réseau en 3D.
 
-function chainProject(x, y, z) {
+const PLATE = { w: 3.6, h: 2.5, gap: 1.9, tex: [320, 222] };
+let chainPitch = 0.32;
+let chainHits = [];        // quadrilatères projetés, pour savoir sur quelle plaque on clique
+let chainStage = null;     // étage choisi (ses briques sont mises en avant sous la carte)
+
+function plateProject([x, y, z], cw, ch, scale) { // projection parallèle : une plaque reste un parallélogramme
   const c = Math.cos(chainYaw), s = Math.sin(chainYaw);
-  const xr = x * c - y * s, yr = x * s + y * c;
-  return { x: xr * CHAIN.scale, y: (yr * CHAIN.pitch - z) * CHAIN.scale * 0.92, depth: yr };
+  const x1 = x * c + z * s, z1 = -x * s + z * c;
+  const y2 = y * Math.cos(chainPitch) - z1 * Math.sin(chainPitch);
+  const z2 = y * Math.sin(chainPitch) + z1 * Math.cos(chainPitch);
+  return [cw / 2 + x1 * scale, ch / 2 + y2 * scale, z2];
 }
 
-function shade(hex, k) { // k < 1 assombrit, k > 1 éclaircit
-  const n = parseInt(hex.slice(1), 16);
-  const ch = [n >> 16, (n >> 8) & 255, n & 255].map((v) => Math.max(0, Math.min(255, Math.round(k <= 1 ? v * k : v + (255 - v) * (k - 1)))));
-  return `rgb(${ch.join(",")})`;
+// Le contenu de chaque plaque, dessiné sur une petite toile hors écran.
+function plateTexture(res, model, i) {
+  const [W, H] = PLATE.tex, cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d"), color = STAGE_COLOR[i], stage = model.stages[i];
+  const built = stage.blocks.filter((b) => b.state === "built").length;
+  ctx.fillStyle = "#151a24"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = color; ctx.fillRect(0, 0, W, 30);
+  ctx.fillStyle = "#0f1117"; ctx.font = "bold 15px system-ui"; ctx.textBaseline = "middle";
+  ctx.fillText(`${i + 1}. ${stage.name}`, 10, 15);
+  ctx.font = "12px system-ui"; ctx.textAlign = "right";
+  ctx.fillText(`${built} / ${stage.blocks.length} en place`, W - 10, 15);
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  const box = { x: 12, y: 40, w: W - 24, h: H - 52 };
+  const drawn = (res.kind === "ml" ? texML : res.kind === "agent" ? texAgent : texTorch)(ctx, res, i, box);
+  if (!drawn) { // rien à montrer : l'étage n'existe pas encore dans ce projet
+    ctx.strokeStyle = color; ctx.setLineDash([6, 5]); ctx.strokeRect(box.x, box.y, box.w, box.h); ctx.setLineDash([]);
+    ctx.fillStyle = "#8b93a7"; ctx.font = "14px system-ui"; ctx.textAlign = "center";
+    ctx.fillText("pas encore là", W / 2, box.y + box.h / 2);
+    ctx.textAlign = "left";
+  }
+  return cv;
+}
+
+function texText(ctx, lines, box, size = 13) {
+  ctx.font = `${size}px ui-monospace, Menlo, monospace`;
+  lines.slice(0, Math.floor(box.h / (size + 6))).forEach(([text, c], k) => {
+    ctx.fillStyle = c || "#e6e8ee";
+    ctx.fillText(String(text).slice(0, 34), box.x + 4, box.y + 14 + k * (size + 6));
+  });
+  return true;
+}
+
+function texPoints(ctx, sc, box, withRegions) {
+  const xs = sc.points.map((p) => p[0]), ys = sc.points.map((p) => p[1]);
+  const [x0, x1] = sc.regions ? sc.regions.x : [Math.min(...xs), Math.max(...xs)];
+  const [y0, y1] = sc.regions ? sc.regions.y : [Math.min(...ys), Math.max(...ys)];
+  const X = (v) => box.x + ((v - x0) / (x1 - x0 || 1)) * box.w, Y = (v) => box.y + box.h - ((v - y0) / (y1 - y0 || 1)) * box.h;
+  if (withRegions && sc.regions) {
+    const n = sc.regions.cells.length, cw = box.w / n, chh = box.h / n;
+    sc.regions.cells.forEach((row, r) => row.forEach((c, k) => {
+      ctx.fillStyle = classColor(c) + "55";
+      ctx.fillRect(box.x + k * cw, box.y + box.h - (r + 1) * chh, cw + 0.6, chh + 0.6);
+    }));
+  }
+  sc.points.forEach(([x, y], k) => {
+    ctx.fillStyle = classColor(sc.labels[k]);
+    ctx.beginPath(); ctx.arc(X(x), Y(y), 2.6, 0, 2 * Math.PI); ctx.fill();
+  });
+  return true;
+}
+
+function texBars(ctx, values, box, colors) {
+  const max = Math.max(...values.map(Math.abs), 1e-9), bw = box.w / values.length;
+  values.forEach((v, k) => {
+    const h = (Math.abs(v) / max) * box.h;
+    ctx.fillStyle = colors ? colors(k, v) : "#5b8cff";
+    ctx.fillRect(box.x + k * bw + 1, box.y + box.h - h, Math.max(1, bw - 2), h);
+  });
+  return true;
+}
+
+function texML(ctx, res, i, box) {
+  const ops = res.mlops || {}, prod = ops.production, mon = ops.monitoring;
+  if (i === 0) return res.scatter ? texPoints(ctx, res.scatter, box, false)
+    : res.curve ? texPoints(ctx, { points: res.curve.points, labels: res.curve.points.map(() => 0) }, box, false)
+    : texText(ctx, [[`${res.n_samples} exemples`], [`${res.features.length} colonnes`]], box);
+  if (i === 1) {
+    if (res.scatter && res.scatter.regions) return texPoints(ctx, res.scatter, box, true);
+    const bars = res.importances || res.coefficients;
+    return bars ? texBars(ctx, bars.map((b) => b.value), box, (k, v) => (v >= 0 ? "#b083f0" : "#ff6b6b")) : texText(ctx, [[res.estimator]], box);
+  }
+  if (i === 2) {
+    const infra = typeof opsInfra !== "undefined" && opsInfra ? opsInfra : { phase: "idle" };
+    const lines = [["tests/test_train.py", "#4cd98a"], [".github/workflows/tests.yml", "#f2b84b"]];
+    (ops.versions || []).slice(-3).forEach((v) => lines.push([`v${v.version}  ${v.estimator}`, prod && prod.version === v.version ? "#4cd98a" : "#e6e8ee"]));
+    if (["starting", "running", "stopped"].includes(infra.phase)) lines.push([`image ${infra.size_mb} Mo`, "#5b8cff"]);
+    return texText(ctx, lines, box, 12);
+  }
+  if (!prod) return false;
+  if (mon && mon.features && mon.features.length) { // le trafic reçu (jaune) contre les données d'entraînement (gris)
+    const f = mon.features[0], half = { ...box, h: box.h - 18 };
+    const n = f.reference.length, bw = half.w / n, max = Math.max(...f.reference, ...f.received, 1e-9);
+    f.reference.forEach((v, k) => { ctx.fillStyle = "#8b93a799"; const h = (v / max) * half.h; ctx.fillRect(half.x + k * bw, half.y + half.h - h, bw - 2, h); });
+    f.received.forEach((v, k) => { ctx.fillStyle = "#f2b84bcc"; const h = (v / max) * half.h; ctx.fillRect(half.x + k * bw + 3, half.y + half.h - h, bw - 6, h); });
+    ctx.fillStyle = mon.status === "alert" ? "#ff6b6b" : "#8b93a7"; ctx.font = "12px system-ui";
+    ctx.fillText(`${f.name} · ${mon.requests} requêtes · dérive ${mon.drift.toFixed(2)}`, box.x, box.y + box.h);
+    return true;
+  }
+  return texText(ctx, [[`API v${prod.version} en service`, "#4cd98a"], ["aucun trafic observé", "#8b93a7"]], box);
+}
+
+function texTorch(ctx, res, i, box) {
+  if (i === 0) {
+    const map = res.input.preview && res.input.preview.maps && res.input.preview.maps[0];
+    if (!map) return texText(ctx, (res.input.tokens || []).map((t) => [t]), box, 14);
+    const n = map.length, cell = Math.min(box.w, box.h) / n, ox = box.x + (box.w - cell * n) / 2;
+    map.forEach((row, r) => row.forEach((v, k) => { const g = Math.round(v * 255); ctx.fillStyle = `rgb(${g},${g},${g})`; ctx.fillRect(ox + k * cell, box.y + r * cell, cell + 0.5, cell + 0.5); }));
+    return true;
+  }
+  if (i === 1) {
+    const conv = res.layers.find((l) => l.preview && l.preview.maps);
+    if (conv) { // les cartes d'activation de la première couche qui voit l'image
+      const maps = conv.preview.maps.slice(0, 8), cols = 4, size = Math.min(box.w / cols, (box.h - 30) / 2) - 4;
+      maps.forEach((m, k) => {
+        const n = m.length, cell = size / n, ox = box.x + (k % cols) * (size + 4), oy = box.y + Math.floor(k / cols) * (size + 4);
+        m.forEach((row, r) => row.forEach((v, q) => { ctx.fillStyle = `rgb(${heat(v).slice(0, 3).join(",")})`; ctx.fillRect(ox + q * cell, oy + r * cell, cell + 0.4, cell + 0.4); }));
+      });
+    }
+    const probs = res.prediction && res.prediction.probs;
+    if (probs) texBars(ctx, probs, { x: box.x, y: box.y + box.h - 26, w: box.w, h: 26 }, (k) => (k === res.prediction.top ? "#4cd98a" : "#b083f0"));
+    if (!conv) { // un réseau de texte : les vecteurs de la première couche, un mot par ligne
+      const rows = res.layers[0] && res.layers[0].preview.rows;
+      if (!rows) return texText(ctx, [[`${res.layers.length} couches`]], box);
+      const area = probs ? { ...box, h: box.h - 32 } : box, cw = area.w / rows[0].length, chh = area.h / rows.length;
+      rows.forEach((row, r) => row.forEach((v, k) => { const a = Math.min(1, Math.abs(v)); ctx.fillStyle = v >= 0 ? `rgba(242,160,75,${a})` : `rgba(91,140,255,${a})`; ctx.fillRect(area.x + k * cw, area.y + r * chh, cw - 1, chh - 1); }));
+    }
+    return true;
+  }
+  if (i === 2) return texText(ctx, [["tests/test_model.py", "#4cd98a"], [".github/workflows/tests.yml", "#f2b84b"], ["pas encore de version figée", "#8b93a7"]], box, 12);
+  return false;
+}
+
+function texAgent(ctx, res, i, box) {
+  const ops = res.ops || {};
+  if (i === 0) return res.start ? texText(ctx, Object.entries(res.start).map(([k, v]) => [`${k}: ${v}`]), box, 12) : false;
+  if (i === 1) { // les étapes du graphe, avec leurs chemins
+    const steps = res.nodes.filter((n) => n.kind === "step"), pos = {};
+    steps.forEach((n, k) => { pos[n.id] = [box.x + 20 + k * ((box.w - 40) / Math.max(1, steps.length - 1)), box.y + box.h / 2 + (k % 2 ? 26 : -26)]; });
+    ctx.strokeStyle = "#8b93a7"; ctx.lineWidth = 1.2;
+    res.edges.forEach((e) => { const a = pos[e.source], b = pos[e.target]; if (a && b) { ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); } });
+    steps.forEach((n) => {
+      const [x, y] = pos[n.id];
+      ctx.fillStyle = "#f2b84b"; ctx.beginPath(); ctx.arc(x, y, 9, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = "#e6e8ee"; ctx.font = "11px system-ui"; ctx.textAlign = "center"; ctx.fillText(n.id.slice(0, 10), x, y + 24); ctx.textAlign = "left";
+    });
+    return true;
+  }
+  if (i === 2) {
+    const lines = [];
+    (ops.rules || []).forEach((r) => lines.push([`garde-fou : ${r}`, "#4cd98a"]));
+    if (ops.limits) Object.entries(ops.limits).forEach(([k, v]) => lines.push([`plafond ${k} : ${v}`, "#f2b84b"]));
+    if (res.start) lines.push(["tests/test_agent.py", "#4cd98a"]);
+    return lines.length ? texText(ctx, lines, box, 12) : false;
+  }
+  const spans = ops.spans || [];
+  if (!spans.length) return false;
+  const t0 = Math.min(...spans.map((s) => s.start)), t1 = Math.max(...spans.map((s) => s.end)), rowH = Math.min(18, box.h / spans.length);
+  spans.forEach((sp, k) => { // la trace : une barre par étape, à sa place dans le temps
+    const x = box.x + ((sp.start - t0) / (t1 - t0 || 1)) * box.w, w = Math.max(3, ((sp.end - sp.start) / (t1 - t0 || 1)) * box.w);
+    ctx.fillStyle = sp.kind === "step" ? "#4cd98a" : "#5b8cff"; ctx.fillRect(x, box.y + k * rowH, w, rowH - 3);
+  });
+  return true;
 }
 
 function drawChain() {
-  const root = $("chain"), model = chainModel;
-  if (!model) return;
-  root.innerHTML = "";
-  const g = CHAIN, items = [], boxes = [];
-  const rows = Math.max(...model.stages.map((s) => s.blocks.length));
-  const depth = rows * g.rowGap + 0.5;
-  model.stages.forEach((stage, i) => {
-    const x0 = i * (g.stageW + g.stageGap);
-    items.push({ kind: "stage", i, name: stage.name, pts: [[x0, 0], [x0 + g.stageW, 0], [x0 + g.stageW, depth], [x0, depth]] });
-    stage.blocks.forEach((b, k) => {
-      const bx = x0 + (g.stageW - g.blockW) / 2, by = 0.45 + k * g.rowGap;
-      boxes.push({ b, i, x: bx, y: by, w: g.blockW, d: g.blockD, h: HEIGHT[b.state] });
-    });
-  });
-  const centre = (id) => { const o = boxes.find((v) => v.b.id === id); return o ? [o.x + o.w / 2, o.y + o.d / 2] : null; };
+  const root = $("chain"), model = chainModel, res = chainResult;
+  if (!model || !res) return;
+  let cv = root.querySelector("canvas");
+  if (!cv) { root.innerHTML = ""; cv = document.createElement("canvas"); cv.className = "chain-canvas"; root.appendChild(cv); }
+  const cw = Math.max(320, root.clientWidth || 600), ch = 360, dpr = window.devicePixelRatio || 1;
+  cv.width = cw * dpr; cv.height = ch * dpr; cv.style.width = `${cw}px`; cv.style.height = `${ch}px`;
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+  const n = model.stages.length, scale = Math.min(cw / 8.2, 80);
+  const zOf = (i) => (i - (n - 1) / 2) * PLATE.gap;
+  const P = (p) => plateProject(p, cw, ch, scale);
+  const textures = model.stages.map((_, i) => plateTexture(res, model, i));
 
-  // Tout projeter une première fois pour cadrer la scène.
-  const all = [];
-  items.forEach((s) => s.pts.forEach(([x, y]) => all.push(chainProject(x, y, 0))));
-  boxes.forEach((o) => [[o.x, o.y], [o.x + o.w, o.y], [o.x + o.w, o.y + o.d], [o.x, o.y + o.d]].forEach(([x, y]) => { all.push(chainProject(x, y, 0)); all.push(chainProject(x, y, o.h + 0.55)); }));
-  const minX = Math.min(...all.map((p) => p.x)) - 14, maxX = Math.max(...all.map((p) => p.x)) + 14;
-  const minY = Math.min(...all.map((p) => p.y)) - 18, maxY = Math.max(...all.map((p) => p.y)) + 26;
-  const P = (x, y, z) => { const p = chainProject(x, y, z); return [p.x - minX, p.y - minY]; };
-  const poly = (pts) => pts.map((p) => p.map((v) => v.toFixed(1)).join(",")).join(" ");
-  const W = maxX - minX, H = maxY - minY;
-  const svg = el("svg", { viewBox: `0 0 ${W.toFixed(0)} ${H.toFixed(0)}`, width: W.toFixed(0), height: H.toFixed(0), class: "chain-svg", role: "img", "aria-label": `Carte de la chaîne : ${model.title}` });
+  // Le fil de la chaîne : il traverse les plaques dans l'ordre, des données jusqu'à la production.
+  ctx.strokeStyle = "#8b93a7"; ctx.setLineDash([5, 5]); ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  model.stages.forEach((_, i) => { const [x, y] = P([0, 0, zOf(i)]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+  ctx.stroke(); ctx.setLineDash([]);
 
-  // Les plateformes, de la plus lointaine à la plus proche.
-  items.slice().sort((a, b) => chainProject(a.pts[0][0] + g.stageW / 2, depth / 2, 0).depth - chainProject(b.pts[0][0] + g.stageW / 2, depth / 2, 0).depth).forEach((s) => {
-    svg.appendChild(el("polygon", { points: poly(s.pts.map(([x, y]) => P(x, y, 0))), class: "chain-stage", style: `stroke:${STAGE_COLOR[s.i]}` }));
-    const corners = s.pts.map(([x, y]) => ({ x, y, p: chainProject(x, y, 0) }));
-    const near = corners.slice().sort((a, b) => b.p.depth - a.p.depth).slice(0, 2); // le bord le plus proche de l'œil
-    const [lx, ly] = P((near[0].x + near[1].x) / 2, (near[0].y + near[1].y) / 2, 0);
-    svg.appendChild(el("text", { x: lx, y: ly + 15, class: "chain-stage-name", style: `fill:${STAGE_COLOR[s.i]}` }, `${s.i + 1}. ${s.name}`));
+  // Les plaques, de la plus lointaine à la plus proche.
+  const order = model.stages.map((_, i) => ({ i, depth: P([0, 0, zOf(i)])[2] })).sort((a, b) => b.depth - a.depth);
+  chainHits = [];
+  order.forEach(({ i }) => {
+    const z = zOf(i), w = PLATE.w / 2, h = PLATE.h / 2;
+    const tl = P([-w, -h, z]), tr = P([w, -h, z]), bl = P([-w, h, z]), br = P([w, h, z]);
+    const [tw, th] = PLATE.tex;
+    ctx.save();
+    ctx.globalAlpha = chainStage === null || chainStage === i ? 0.95 : 0.45;
+    ctx.setTransform(dpr * (tr[0] - tl[0]) / tw, dpr * (tr[1] - tl[1]) / tw, dpr * (bl[0] - tl[0]) / th, dpr * (bl[1] - tl[1]) / th, dpr * tl[0], dpr * tl[1]);
+    ctx.drawImage(textures[i], 0, 0);
+    ctx.restore();
+    ctx.strokeStyle = chainStage === i ? "#ffffff" : STAGE_COLOR[i];
+    ctx.lineWidth = chainStage === i ? 2.2 : 1.2;
+    ctx.beginPath();
+    [tl, tr, br, bl].forEach(([x, y], k) => { if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+    ctx.closePath(); ctx.stroke();
+    chainHits.push({ i, quad: [tl, tr, br, bl] });
   });
-
-  // Les flux : d'une brique à la suivante, puis d'une plateforme à la suivante ; la boucle de retour en pointillés.
-  const flow = (a, b, cls) => {
-    if (!a || !b) return;
-    const [x1, y1] = P(a[0], a[1], 0), [x2, y2] = P(b[0], b[1], 0);
-    svg.appendChild(el("line", { x1, y1, x2, y2, class: `chain-flow ${cls}` }));
-  };
-  model.stages.forEach((stage, i) => {
-    stage.blocks.forEach((b, k) => { if (k) flow(centre(stage.blocks[k - 1].id), centre(b.id), ""); });
-    if (i) flow(centre(model.stages[i - 1].blocks[model.stages[i - 1].blocks.length - 1].id), centre(stage.blocks[0].id), "");
-  });
-  if (model.loop) flow(centre(model.loop[0]), centre(model.loop[1]), "loop");
-
-  // Les briques, de la plus lointaine à la plus proche ; dans chaque brique, les faces dans le même ordre.
-  boxes.sort((a, b) => chainProject(a.x + a.w / 2, a.y + a.d / 2, 0).depth - chainProject(b.x + b.w / 2, b.y + b.d / 2, 0).depth).forEach((o) => {
-    const color = STAGE_COLOR[o.i], b = o.b;
-    const grp = svg.appendChild(el("g", { class: `chain-brick ${b.state}${b.id === chainPicked ? " picked" : ""}`, tabindex: 0, role: "button", "aria-label": `${b.label} : ${STATE_TEXT[b.state]}. ${b.value}` }));
-    const c = [[o.x, o.y], [o.x + o.w, o.y], [o.x + o.w, o.y + o.d], [o.x, o.y + o.d]];
-    const sides = [0, 1, 2, 3].map((k) => {
-      const [a, d] = [c[k], c[(k + 1) % 4]];
-      return { pts: [P(a[0], a[1], 0), P(d[0], d[1], 0), P(d[0], d[1], o.h), P(a[0], a[1], o.h)], depth: chainProject((a[0] + d[0]) / 2, (a[1] + d[1]) / 2, 0).depth, k };
-    }).sort((p, q) => p.depth - q.depth);
-    if (b.state !== "missing") sides.forEach((s) => grp.appendChild(el("polygon", { points: poly(s.pts), fill: shade(color, s.k % 2 ? 0.42 : 0.58), class: "chain-face" })));
-    grp.appendChild(el("polygon", { points: poly(c.map(([x, y]) => P(x, y, o.h))), fill: b.state === "missing" ? "none" : shade(color, b.state === "built" ? 0.9 : 0.6), stroke: color, class: "chain-top" }));
-    const [tx, ty] = P(o.x + o.w / 2, o.y + o.d / 2, o.h);
-    grp.appendChild(el("text", { x: tx, y: ty - 9, class: "chain-label" }, b.label));
-    grp.appendChild(el("title", {}, `${b.label} — ${STATE_TEXT[b.state]} · ${b.value}`));
-    const pick = () => { chainPicked = b.id; drawChain(); };
-    grp.addEventListener("click", pick);
-    grp.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
-    svg.appendChild(grp);
-  });
-  root.appendChild(svg);
+  drawChainChips();
   drawChainInfo();
+}
+
+// Sous la carte : les briques de chaque étage, avec leur état. Un clic l'explique.
+function drawChainChips() {
+  const box = $("chain-chips"), model = chainModel;
+  box.innerHTML = "";
+  model.stages.forEach((stage, i) => {
+    const row = document.createElement("div");
+    row.className = `chain-row${chainStage === i ? " on" : ""}`;
+    const name = document.createElement("b");
+    name.textContent = `${i + 1}. ${stage.name}`;
+    name.style.color = STAGE_COLOR[i];
+    row.appendChild(name);
+    stage.blocks.forEach((b) => {
+      const chip = document.createElement("button");
+      chip.className = `chain-chip ${b.state}${b.id === chainPicked ? " picked" : ""}`;
+      chip.textContent = `${b.state === "built" ? "■" : b.state === "ready" ? "▣" : "□"} ${b.label}`;
+      chip.title = `${STATE_TEXT[b.state]} · ${b.value}`;
+      chip.addEventListener("click", () => { chainPicked = b.id; chainStage = i; drawChain(); });
+      row.appendChild(chip);
+    });
+    box.appendChild(row);
+  });
+}
+
+function insideQuad([x, y], quad) {
+  let inside = false;
+  for (let a = 0, b = quad.length - 1; a < quad.length; b = a++) {
+    const [xa, ya] = quad[a], [xb, yb] = quad[b];
+    if ((ya > y) !== (yb > y) && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) inside = !inside;
+  }
+  return inside;
 }
 
 function drawChainInfo() {
@@ -335,8 +497,10 @@ function chainRefresh() { if (chainResult) renderChain(chainResult); }
 
 // Appelé après chaque analyse réussie.
 function renderChain(res) {
+  const before = chainModel && chainModel.title;
   chainResult = res;
   chainModel = chainFor(res);
+  if (chainModel.title !== before) chainStage = null; // autre type de projet : aucune plaque mise en avant
   const ids = chainModel.stages.flatMap((s) => s.blocks.map((b) => b.id));
   if (!ids.includes(chainPicked)) chainPicked = null;
   $("chain-card").hidden = false;
@@ -346,23 +510,37 @@ function renderChain(res) {
 }
 
 (() => {
-  // Faire tourner la carte en la faisant glisser ; un simple clic garde son rôle (choisir une brique).
+  // Faire glisser fait tourner la carte ; un simple clic choisit la plaque sous la souris.
   const root = $("chain");
   let from = null;
-  root.addEventListener("pointerdown", (e) => { from = { x: e.clientX, yaw: chainYaw, moved: false }; });
+  root.addEventListener("pointerdown", (e) => { from = { x: e.clientX, y: e.clientY, yaw: chainYaw, pitch: chainPitch, moved: false }; });
   window.addEventListener("pointermove", (e) => {
     if (!from) return;
-    if (Math.abs(e.clientX - from.x) < 4 && !from.moved) return;
+    if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < 4 && !from.moved) return;
     from.moved = true;
-    chainYaw = Math.max(CHAIN.yawMin, Math.min(CHAIN.yawMax, from.yaw - (e.clientX - from.x) * 0.006));
+    chainYaw = Math.max(0.05, Math.min(1.45, from.yaw - (e.clientX - from.x) * 0.006));
+    chainPitch = Math.max(0.05, Math.min(0.75, from.pitch + (e.clientY - from.y) * 0.004));
     drawChain();
   });
-  window.addEventListener("pointerup", () => { from = null; });
+  window.addEventListener("pointerup", (e) => {
+    if (from && !from.moved) {
+      const canvas = root.querySelector("canvas");
+      if (canvas) {
+        const r = canvas.getBoundingClientRect(), pt = [e.clientX - r.left, e.clientY - r.top];
+        const hit = chainHits.slice().reverse().find((h) => insideQuad(pt, h.quad)); // la plus proche d'abord
+        chainStage = hit ? hit.i : null;
+        if (hit) chainPicked = null;
+        drawChain();
+      }
+    }
+    from = null;
+  });
   root.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    chainYaw = Math.max(CHAIN.yawMin, Math.min(CHAIN.yawMax, chainYaw + (e.key === "ArrowLeft" ? 0.08 : -0.08)));
+    chainYaw = Math.max(0.05, Math.min(1.45, chainYaw + (e.key === "ArrowLeft" ? 0.08 : -0.08)));
     drawChain();
   });
+  window.addEventListener("resize", () => { if (chainOpen && chainModel) drawChain(); });
   $("chain-toggle").addEventListener("click", () => {
     chainOpen = !chainOpen;
     try { localStorage.setItem("neuro-lens-chaine", chainOpen ? "1" : "0"); } catch (e) { /* stockage indisponible */ }
