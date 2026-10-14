@@ -129,19 +129,23 @@ function drawDepth() {
 
   // Noms des couches au-dessus des plaques, dessinés en dernier pour rester lisibles.
   ctx.font = "11px system-ui, sans-serif";
-  // Les plaques serrées se chevauchent : on n'écrit un nom que s'il a la place (celui survolé, toujours).
-  const placed = [];
-  slabs.map((s, i) => {
+  const rowEnd = [-Infinity, -Infinity, -Infinity, -Infinity];
+  slabs.forEach((s, i) => {
     const text = `${i + 1}. ${s.name} · ${s.dim}`;
     const top = project([W / 2 + 0.04, -H / 2 - 0.04, zOf(i)], cw, ch, scale);
-    const width = ctx.measureText(text).width;
-    return { i, text, x: Math.min(top[0], cw - width - 4), y: top[1], width };
-  }).sort((a, b) => (a.i === hover ? -1 : b.i === hover ? 1 : a.i - b.i)).forEach((l) => {
-    const clash = placed.some((p) => Math.abs(p.y - l.y) < 13 && l.x < p.x + p.width + 6 && p.x < l.x + l.width + 6);
-    if (clash && l.i !== hover) return;
-    placed.push(l);
-    ctx.fillStyle = hover === l.i ? "#e6e8ee" : `rgba(139,147,167,${hover < 0 ? 1 : 0.5})`;
-    ctx.fillText(l.text, l.x, l.y);
+    // Quatre rangées en quinconce, et un nom qui chevaucherait son voisin de rangée est poussé à droite.
+    const r = i % 4, wText = ctx.measureText(text).width;
+    let x = Math.max(top[0], rowEnd[r] + 8);
+    x = Math.min(x, cw - wText - 4);
+    rowEnd[r] = x + wText;
+    const y = 14 + r * 14; // les noms vivent en haut, en quatre rangées ; un fil descend vers la plaque
+    ctx.fillStyle = hover === i ? "#e6e8ee" : `rgba(139,147,167,${hover < 0 ? 1 : 0.5})`;
+    ctx.fillText(text, x, y);
+    if (y < top[1] - 6) { // un petit fil relie le nom à sa plaque quand il a été remonté
+      ctx.strokeStyle = `rgba(139,147,167,${hover === i ? 0.8 : 0.3})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, y + 3); ctx.lineTo(top[0], top[1]); ctx.stroke();
+    }
   });
 
   // Les mots, devant la première plaque.

@@ -22,7 +22,7 @@ Ce que la page montre dépend de ce que le code définit :
 
 ### Réseaux PyTorch
 
-- **Volumes 3D** : ce qui sort de chaque couche, dessiné comme un bloc C × H × W dans l'ordre du calcul, les faces peintes avec les vraies valeurs calculées sur ton dessin. On voit la convolution élargir la profondeur, le maxpool réduire la face, le flatten tout déplier en colonne. Fais glisser pour tourner ; survole un bloc pour sa ligne de code.
+- **Volumes 3D** : ce qui sort de chaque couche, dans le même style de plaques empilées que la vue 3D des tokens : une plaque par étape, à la taille de l'image à cette étape (on la voit rétrécir au fil des maxpool), et derrière chaque plaque une feuille par canal. Orange plus actif que la moyenne, bleu moins, calculé sur ton dessin. Fais glisser pour tourner ; survole une plaque pour sa ligne de code.
 - **Les fonctions de `forward` comptent comme des couches** : dans un modèle écrit en classe, `F.relu(...)`, `F.max_pool2d(...)`, `torch.flatten(...)` apparaissent dans toutes les vues à la ligne de leur appel, comme les `nn.ReLU()` d'un `Sequential`.
 - **Entrée** : une zone de dessin (un chiffre 28×28), ou une phrase si le modèle commence par `nn.Embedding`.
 - **Vue réseau** : des neurones en colonnes reliés par des flèches, plus lumineux quand ils sont actifs.
