@@ -150,12 +150,11 @@ Le serveur exécute le code tapé dans l'éditeur : il est fait pour tourner sur
 
 ## La carte 3D de la chaîne
 
-En haut du panneau de droite, pour chaque type de projet (ML classique, réseau de neurones, agent) : quatre plateformes — **Données, Modèle, Infrastructure, Production** — et sur chacune les briques du projet.
+En haut du panneau de droite, pour chaque type de projet (ML classique, réseau de neurones, agent) : quatre plaques en 3D — **Données, Modèle, Infrastructure, Production** — alignées comme les couches d'un réseau, et sur chacune ce que l'étage contient vraiment dans ton projet : tes points de données, la frontière que le modèle a apprise ou ses cartes d'activation, tes versions et ton image, le trafic reçu en production ou la trace de l'agent.
 
-- Une brique qui existe vraiment dans ton projet se dresse en volume ; une brique prête mais pas branchée reste basse ; une brique absente est à plat.
-- Les flux circulent d'une brique à l'autre ; la boucle en pointillés ramène la production vers les données.
-- Un clic sur une brique l'explique simplement : à quoi elle sert, ce qu'elle vaut dans ton projet, ce qui se passe sans elle, et où la trouver (la carte de la page ou le fichier du projet).
-- La carte se fait tourner à la souris (ou aux flèches du clavier) et suit l'état réel : déployer une version ou lancer le conteneur fait monter les briques correspondantes.
+- La carte se fait tourner à la souris (horizontalement et verticalement) ou aux flèches du clavier ; un clic sur une plaque la met en avant.
+- Sous la carte, les briques de chaque étage et leur état : ■ en place, ▣ prête mais pas branchée, □ absente. Un clic sur une brique l'explique simplement : à quoi elle sert, ce qu'elle vaut dans ton projet, ce qui se passe sans elle, et où la trouver.
+- Tout suit l'état réel : déployer une version, construire l'image ou simuler du trafic change les plaques et les briques.
 
 ## S'entraîner, pas seulement regarder
 

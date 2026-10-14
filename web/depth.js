@@ -129,12 +129,19 @@ function drawDepth() {
 
   // Noms des couches au-dessus des plaques, dessinés en dernier pour rester lisibles.
   ctx.font = "11px system-ui, sans-serif";
-  slabs.forEach((s, i) => {
+  // Les plaques serrées se chevauchent : on n'écrit un nom que s'il a la place (celui survolé, toujours).
+  const placed = [];
+  slabs.map((s, i) => {
     const text = `${i + 1}. ${s.name} · ${s.dim}`;
     const top = project([W / 2 + 0.04, -H / 2 - 0.04, zOf(i)], cw, ch, scale);
-    const x = Math.min(top[0], cw - ctx.measureText(text).width - 4);
-    ctx.fillStyle = hover === i ? "#e6e8ee" : `rgba(139,147,167,${hover < 0 ? 1 : 0.5})`;
-    ctx.fillText(text, x, top[1]);
+    const width = ctx.measureText(text).width;
+    return { i, text, x: Math.min(top[0], cw - width - 4), y: top[1], width };
+  }).sort((a, b) => (a.i === hover ? -1 : b.i === hover ? 1 : a.i - b.i)).forEach((l) => {
+    const clash = placed.some((p) => Math.abs(p.y - l.y) < 13 && l.x < p.x + p.width + 6 && p.x < l.x + l.width + 6);
+    if (clash && l.i !== hover) return;
+    placed.push(l);
+    ctx.fillStyle = hover === l.i ? "#e6e8ee" : `rgba(139,147,167,${hover < 0 ? 1 : 0.5})`;
+    ctx.fillText(l.text, l.x, l.y);
   });
 
   // Les mots, devant la première plaque.
