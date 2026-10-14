@@ -721,3 +721,11 @@ def test_mode_panne_injects_a_fault_the_views_can_show():
 
     # Un code sans panne connue : on le dit, sans casser quoi que ce soit.
     assert pannes.start("x = 1")["ok"] is False
+
+
+def test_page_and_scripts_are_never_served_stale():
+    import server.app as app_module
+
+    with TestClient(app_module.app) as client:
+        for path in ("/", "/static/app.js"):
+            assert client.get(path).headers["cache-control"] == "no-cache"

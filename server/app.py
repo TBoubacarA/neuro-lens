@@ -114,6 +114,18 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="neuro-lens", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def always_fresh(request, call_next):
+    """La page et ses scripts changent souvent : le navigateur doit toujours redemander la dernière version.
+
+    Sans cela, il peut garder en cache un ancien app.js après une mise à jour, et une nouveauté reste invisible.
+    """
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @app.post("/api/analyze")
 def analyze_endpoint(req: AnalyzeRequest) -> dict:
     result = worker.run(req.code, req.pixels, req.text, op="live" if req.live else "analyze",
